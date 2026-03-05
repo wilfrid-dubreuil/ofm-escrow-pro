@@ -311,10 +311,18 @@ function buildContractPdfBuffer({ transaction, buyer, seller }) {
     writeLine('Période de garantie', `${Number(tx.garantieperiode || 0)} heures`);
     writeLine('Date création', new Date(createdAt).toLocaleString('fr-FR'));
     writeLine('Initiateur (id_login)', tx.initiateur || '-');
-    writeLine('Engagement acheteur', tx.engagementAcheteur || '-');
-    writeLine('Engagement vendeur', tx.engagementVendeur || '-');
     writeLine('Wallet vendeur EVM', tx.walletVendeurEvm || '-');
     writeLine('Wallet vendeur Phantom', tx.walletVendeurPhantom || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Engagement acheteur');
+    doc.moveDown(0.4);
+    writeLine('Texte', tx.engagementAcheteur || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Engagement vendeur');
+    doc.moveDown(0.4);
+    writeLine('Texte', tx.engagementVendeur || '-');
     doc.moveDown(1);
 
     doc.font('Helvetica-Bold').fontSize(13).text('Informations acheteur');
