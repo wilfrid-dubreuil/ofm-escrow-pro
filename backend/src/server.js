@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const admin = require('firebase-admin');
+const PDFDocument = require('pdfkit');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -155,6 +156,222 @@ function getNormalizedUserHandle(user) {
     || nestedHandle
     || ''
   );
+}
+
+function getUserDisplayName(user, fallback = '') {
+  return String(
+    user?.Name
+    || user?.name
+    || user?.displayName
+    || user?.mail
+    || user?.email
+    || fallback
+    || ''
+  ).trim();
+}
+
+function getUserEmail(user, fallback = '') {
+  return String(
+    user?.mail
+    || user?.email
+    || user?.Email
+    || fallback
+    || ''
+  ).trim();
+}
+
+async function ensureConversationForTransactionData({ transactionId, buyerIdLogin, sellerIdLogin, senderIdLogin }) {
+  const users = await resolveUsersByIdLogin([buyerIdLogin, sellerIdLogin, senderIdLogin]);
+  const buyer = users.get(buyerIdLogin);
+  const seller = users.get(sellerIdLogin);
+  const sender = users.get(senderIdLogin);
+
+  if (!buyer || !seller || !sender) {
+    throw new Error('Participants introuvables dans users.');
+  }
+
+  const buyerHandle = getNormalizedUserHandle(buyer);
+  const sellerHandle = getNormalizedUserHandle(seller);
+  const senderHandle = getNormalizedUserHandle(sender);
+
+  const safeBuyerHandle = buyerHandle || normalizeHandle(buyerIdLogin);
+  const safeSellerHandle = sellerHandle || normalizeHandle(sellerIdLogin);
+  const safeSenderHandle = senderHandle
+    || (senderIdLogin === buyerIdLogin ? safeBuyerHandle : '')
+    || (senderIdLogin === sellerIdLogin ? safeSellerHandle : '')
+    || safeBuyerHandle;
+
+  const participants = [buyerIdLogin, sellerIdLogin]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .sort();
+  const transactionSuffix = transactionId ? `__tx__${transactionId}` : '';
+  const conversationId = `${participants.join('__')}${transactionSuffix}`;
+  const now = Date.now();
+  const initialText = transactionId
+    ? `Conversation démarrée pour la transaction ${transactionId}`
+    : 'Conversation démarrée';
+
+  let created = false;
+
+  if (adminDb) {
+    const convRef = adminDb.collection('conversations').doc(conversationId);
+    const convDoc = await convRef.get();
+
+    if (!convDoc.exists) {
+      await convRef.set({
+        participants,
+        transactionId,
+        lastMessage: initialText,
+        lastMessageAt: now,
+        lastMessageSenderId: safeSenderHandle,
+        createdAt: now
+      });
+
+      await convRef.collection('messages').add({
+        senderId: safeSenderHandle,
+        text: initialText,
+        createdAt: now,
+        type: 'text',
+        seenBy: [safeSenderHandle]
+      });
+
+      created = true;
+    } else {
+      await convRef.set({
+        participants,
+        transactionId,
+        lastMessageAt: now
+      }, { merge: true });
+    }
+  }
+
+  const conversations = await readConversationsFile();
+  const existingIndex = conversations.findIndex(c => String(c.id || '').trim() === conversationId);
+
+  if (existingIndex === -1) {
+    conversations.push({
+      id: conversationId,
+      participants,
+      transactionId,
+      lastMessage: initialText,
+      lastMessageAt: now,
+      lastMessageSenderId: safeSenderHandle,
+      createdAt: now,
+      messages: [{
+        id: `msg-${now}`,
+        senderId: safeSenderHandle,
+        text: initialText,
+        createdAt: now,
+        type: 'text',
+        seenBy: [safeSenderHandle]
+      }]
+    });
+    await writeConversationsFile(conversations);
+    created = true;
+  } else {
+    conversations[existingIndex].participants = participants;
+    conversations[existingIndex].transactionId = transactionId;
+    await writeConversationsFile(conversations);
+  }
+
+  return { conversationId, created, participants, senderHandle: safeSenderHandle };
+}
+
+function buildContractPdfBuffer({ transaction, buyer, seller }) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 42, size: 'A4' });
+    const chunks = [];
+
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const tx = transaction || {};
+    const createdAt = toMillis(tx.datecreation) ?? Date.now();
+    const title = String(tx.titre || 'Transaction').trim();
+
+    const writeLine = (label, value) => {
+      doc.font('Helvetica-Bold').fontSize(10).text(`${label}: `, { continued: true });
+      doc.font('Helvetica').fontSize(10).text(String(value || '-'));
+    };
+
+    doc.font('Helvetica-Bold').fontSize(18).text('Contrat de transaction OFM', { align: 'center' });
+    doc.moveDown(0.7);
+    doc.font('Helvetica').fontSize(10).text(`Document généré le ${new Date().toLocaleString('fr-FR')}`, { align: 'center' });
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations transaction');
+    doc.moveDown(0.4);
+    writeLine('ID transaction', tx.id || tx.dbTransactionId || '-');
+    writeLine('Titre', title);
+    writeLine('Statut', tx.statut || '-');
+    writeLine('Crypto paiement', tx.cryptopaiement || '-');
+    writeLine('Montant', `${Number(tx.montant || 0).toFixed(2)} €`);
+    writeLine('Période de garantie', `${Number(tx.garantieperiode || 0)} heures`);
+    writeLine('Date création', new Date(createdAt).toLocaleString('fr-FR'));
+    writeLine('Initiateur (id_login)', tx.initiateur || '-');
+    writeLine('Engagement acheteur', tx.engagementAcheteur || '-');
+    writeLine('Engagement vendeur', tx.engagementVendeur || '-');
+    writeLine('Wallet vendeur EVM', tx.walletVendeurEvm || '-');
+    writeLine('Wallet vendeur Phantom', tx.walletVendeurPhantom || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations acheteur');
+    doc.moveDown(0.4);
+    writeLine('Nom', getUserDisplayName(buyer, tx.acheteur_name || tx.acheteur));
+    writeLine('Email', getUserEmail(buyer, ''));
+    writeLine('Handle', String(buyer?.handle || '').trim() ? `@${normalizeHandle(buyer?.handle)}` : '-');
+    writeLine('Réputation', String(buyer?.['réputation'] ?? buyer?.reputation ?? '-'));
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations vendeur');
+    doc.moveDown(0.4);
+    writeLine('Nom', getUserDisplayName(seller, tx.vendeur_name || tx.vendeur));
+    writeLine('Email', getUserEmail(seller, ''));
+    writeLine('Handle', String(seller?.handle || '').trim() ? `@${normalizeHandle(seller?.handle)}` : '-');
+    writeLine('Réputation', String(seller?.['réputation'] ?? seller?.reputation ?? '-'));
+    doc.moveDown(1.2);
+
+    doc.font('Helvetica').fontSize(9).fillColor('#444444').text('Ce document est généré automatiquement lors du passage à l\'étape "Signer contrat".', { align: 'left' });
+    doc.end();
+  });
+}
+
+async function appendConversationMessage({ conversationId, message, lastMessage, lastMessageSenderId }) {
+  let found = false;
+
+  if (adminDb) {
+    const convRef = adminDb.collection('conversations').doc(conversationId);
+    const convDoc = await convRef.get();
+    if (convDoc.exists) {
+      const newDoc = await convRef.collection('messages').add(message);
+      await convRef.update({
+        lastMessage,
+        lastMessageAt: message.createdAt,
+        lastMessageSenderId
+      });
+      message.id = newDoc.id;
+      found = true;
+    }
+  }
+
+  const conversations = await readConversationsFile();
+  const index = conversations.findIndex(c => String(c.id || '').trim() === conversationId);
+  if (index >= 0) {
+    const localMessage = { id: message.id || `msg-${message.createdAt}`, ...message };
+    const currentMessages = Array.isArray(conversations[index].messages) ? conversations[index].messages : [];
+    conversations[index].messages = [...currentMessages, localMessage];
+    conversations[index].lastMessage = lastMessage;
+    conversations[index].lastMessageAt = message.createdAt;
+    conversations[index].lastMessageSenderId = lastMessageSenderId;
+    await writeConversationsFile(conversations);
+    found = true;
+  }
+
+  if (!found) {
+    throw new Error('Conversation introuvable.');
+  }
 }
 
 app.get('/api/health', (_req, res) => {
@@ -402,6 +619,8 @@ app.post('/api/transactions', async (req, res) => {
       cryptopaiement: 'SOL',
       montant,
       garantieperiode,
+      engagementAcheteur: '',
+      engagementVendeur: '',
       statut: 'En attente',
       datecreation: now
     };
@@ -556,7 +775,23 @@ app.patch('/api/transactions/:id/statut', async (req, res) => {
   try {
     const transactionId = String(req.params.id || '').trim();
     const statut = String(req.body?.statut || '').trim();
-    const allowed = ['En attente', 'Accepté', 'Refusé'];
+    const allowed = [
+      'En attente',
+      'Configurer',
+      'Valider contrat',
+      'Signer contrat',
+      'Déposer les fonds',
+      'Déposer les documents',
+      'Garantie',
+      'Noter',
+      'Terminer',
+      'Accepté',
+      'Refusé',
+      'LOCKED',
+      'DISPUTE',
+      'RELEASED',
+      'REFUNDED'
+    ];
 
     if (!transactionId) {
       return res.status(400).json({ ok: false, message: 'ID transaction manquant.' });
@@ -677,6 +912,227 @@ app.patch('/api/transactions/:id/wallets', async (req, res) => {
     return res.json({ ok: true, id: transactionId, walletVendeurEvm, walletVendeurPhantom });
   } catch (error) {
     return res.status(500).json({ ok: false, message: 'Erreur mise à jour wallets vendeur.', error: error.message });
+  }
+});
+
+app.patch('/api/transactions/:id/engagements', async (req, res) => {
+  try {
+    const transactionId = String(req.params.id || '').trim();
+    const engagementAcheteur = String(req.body?.engagementAcheteur || '').trim();
+    const engagementVendeur = String(req.body?.engagementVendeur || '').trim();
+
+    if (!transactionId) {
+      return res.status(400).json({ ok: false, message: 'ID transaction manquant.' });
+    }
+
+    let updated = false;
+
+    if (adminDb) {
+      const docRef = adminDb.collection('transactions').doc(transactionId);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.update({
+          engagementAcheteur,
+          engagementVendeur
+        });
+        updated = true;
+      }
+    }
+
+    const localTransactions = await readTransactionsFile();
+    const idx = localTransactions.findIndex(tx => String(tx.id || '').trim() === transactionId);
+    if (idx >= 0) {
+      localTransactions[idx].engagementAcheteur = engagementAcheteur;
+      localTransactions[idx].engagementVendeur = engagementVendeur;
+      await writeTransactionsFile(localTransactions);
+      updated = true;
+    }
+
+    if (!updated) {
+      return res.status(404).json({ ok: false, message: 'Transaction introuvable.' });
+    }
+
+    return res.json({ ok: true, id: transactionId, engagementAcheteur, engagementVendeur });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: 'Erreur mise à jour engagements transaction.', error: error.message });
+  }
+});
+
+app.patch('/api/transactions/:id/validation-contrat', async (req, res) => {
+  try {
+    const transactionId = String(req.params.id || '').trim();
+    const validationAcheteur = !!req.body?.validationAcheteur;
+    const validationVendeur = !!req.body?.validationVendeur;
+
+    if (!transactionId) {
+      return res.status(400).json({ ok: false, message: 'ID transaction manquant.' });
+    }
+
+    let updated = false;
+
+    if (adminDb) {
+      const docRef = adminDb.collection('transactions').doc(transactionId);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.update({
+          validationAcheteur,
+          validationVendeur
+        });
+        updated = true;
+      }
+    }
+
+    const localTransactions = await readTransactionsFile();
+    const idx = localTransactions.findIndex(tx => String(tx.id || '').trim() === transactionId);
+    if (idx >= 0) {
+      localTransactions[idx].validationAcheteur = validationAcheteur;
+      localTransactions[idx].validationVendeur = validationVendeur;
+      await writeTransactionsFile(localTransactions);
+      updated = true;
+    }
+
+    if (!updated) {
+      return res.status(404).json({ ok: false, message: 'Transaction introuvable.' });
+    }
+
+    return res.json({ ok: true, id: transactionId, validationAcheteur, validationVendeur });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: 'Erreur mise à jour validation contrat.', error: error.message });
+  }
+});
+
+app.post('/api/transactions/:id/generate-contract-pdf', async (req, res) => {
+  try {
+    const transactionId = String(req.params.id || '').trim();
+    const senderIdLoginRaw = String(req.body?.senderIdLogin || '').trim();
+
+    if (!transactionId) {
+      return res.status(400).json({ ok: false, message: 'ID transaction manquant.' });
+    }
+
+    if (!adminStorageBucket) {
+      return res.status(503).json({ ok: false, message: 'Firebase Storage Admin indisponible côté serveur.' });
+    }
+
+    let transaction = null;
+
+    if (adminDb) {
+      const doc = await adminDb.collection('transactions').doc(transactionId).get();
+      if (doc.exists) {
+        transaction = { id: doc.id, ...doc.data() };
+      }
+    }
+
+    if (!transaction) {
+      const localTransactions = await readTransactionsFile();
+      transaction = localTransactions.find(tx => String(tx.id || '').trim() === transactionId) || null;
+    }
+
+    if (!transaction) {
+      return res.status(404).json({ ok: false, message: 'Transaction introuvable.' });
+    }
+
+    const buyerIdLogin = String(transaction.acheteur || '').trim();
+    const sellerIdLogin = String(transaction.vendeur || '').trim();
+    const senderIdLogin = senderIdLoginRaw || buyerIdLogin || sellerIdLogin;
+
+    if (!buyerIdLogin || !sellerIdLogin || !senderIdLogin) {
+      return res.status(400).json({ ok: false, message: 'Participants transaction incomplets.' });
+    }
+
+    const usersMap = await resolveUsersByIdLogin([buyerIdLogin, sellerIdLogin, senderIdLogin]);
+    const buyerUser = usersMap.get(buyerIdLogin) || null;
+    const sellerUser = usersMap.get(sellerIdLogin) || null;
+
+    const { conversationId, senderHandle } = await ensureConversationForTransactionData({
+      transactionId,
+      buyerIdLogin,
+      sellerIdLogin,
+      senderIdLogin
+    });
+
+    const pdfBuffer = await buildContractPdfBuffer({
+      transaction,
+      buyer: buyerUser,
+      seller: sellerUser
+    });
+
+    const attachmentName = 'contrat.pdf';
+    const objectPath = `conversations/${conversationId}/files/${Date.now()}_${attachmentName}`;
+
+    const token = crypto.randomUUID();
+    const file = adminStorageBucket.file(objectPath);
+    await file.save(pdfBuffer, {
+      contentType: 'application/pdf',
+      resumable: false,
+      metadata: {
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+          conversationId,
+          transactionId,
+          uploaderId: senderIdLogin,
+          generatedType: 'contract-pdf'
+        }
+      }
+    });
+
+    const encodedPath = encodeURIComponent(objectPath);
+    const reference = `https://firebasestorage.googleapis.com/v0/b/${adminStorageBucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+
+    const now = Date.now();
+    const message = {
+      senderId: senderHandle,
+      text: '📄 Contrat généré automatiquement (étape Signer contrat).',
+      createdAt: now,
+      type: 'attachment',
+      seenBy: [senderHandle],
+      reference,
+      attachmentName,
+      attachmentType: 'application/pdf',
+      attachmentSize: pdfBuffer.length
+    };
+
+    await appendConversationMessage({
+      conversationId,
+      message,
+      lastMessage: `📎 ${attachmentName}`,
+      lastMessageSenderId: senderHandle
+    });
+
+    if (adminDb) {
+      const docRef = adminDb.collection('transactions').doc(transactionId);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.update({
+          contratPdfReference: reference,
+          contratPdfName: attachmentName,
+          contratPdfConversationId: conversationId,
+          contratPdfGeneratedAt: now
+        });
+      }
+    }
+
+    const localTransactions = await readTransactionsFile();
+    const idx = localTransactions.findIndex(tx => String(tx.id || '').trim() === transactionId);
+    if (idx >= 0) {
+      localTransactions[idx].contratPdfReference = reference;
+      localTransactions[idx].contratPdfName = attachmentName;
+      localTransactions[idx].contratPdfConversationId = conversationId;
+      localTransactions[idx].contratPdfGeneratedAt = now;
+      await writeTransactionsFile(localTransactions);
+    }
+
+    return res.status(201).json({
+      ok: true,
+      transactionId,
+      conversationId,
+      reference,
+      attachmentName,
+      attachmentType: 'application/pdf',
+      attachmentSize: pdfBuffer.length
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: 'Erreur génération contrat PDF.', error: error.message });
   }
 });
 

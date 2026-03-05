@@ -607,5 +607,91 @@
         ]
       }
     ]
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__j80Dpp8YoDIfzvDOqp4s",
+    "participants": [
+      "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+      "wVwSazUXDrf05jmQIDh4K2Nczzh1"
+    ],
+    "transactionId": "j80Dpp8YoDIfzvDOqp4s",
+    "lastMessage": "Conversation démarrée pour la transaction j80Dpp8YoDIfzvDOqp4s",
+    "lastMessageAt": 1772707949090,
+    "lastMessageSenderId": "testwill",
+    "createdAt": 1772707949090,
+    "messages": [
+      {
+        "id": "msg-1772707949090",
+        "senderId": "testwill",
+        "text": "Conversation démarrée pour la transaction j80Dpp8YoDIfzvDOqp4s",
+        "createdAt": 1772707949090,
+        "type": "text",
+        "seenBy": [
+          "testwill"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__rKzju0uzvO5QeiHc8ZLC",
+    "participants": [
+      "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+      "wVwSazUXDrf05jmQIDh4K2Nczzh1"
+    ],
+    "transactionId": "rKzju0uzvO5QeiHc8ZLC",
+    "lastMessage": "Conversation démarrée pour la transaction rKzju0uzvO5QeiHc8ZLC",
+    "lastMessageAt": 1772708363365,
+    "lastMessageSenderId": "wilfdaub",
+    "createdAt": 1772708363365,
+    "messages": [
+      {
+        "id": "msg-1772708363365",
+        "senderId": "wilfdaub",
+        "text": "Conversation démarrée pour la transaction rKzju0uzvO5QeiHc8ZLC",
+        "createdAt": 1772708363365,
+        "type": "text",
+        "seenBy": [
+          "wilfdaub"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__jMfZZVxVeXPMqG3IMz5A",
+    "participants": [
+      "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+      "wVwSazUXDrf05jmQIDh4K2Nczzh1"
+    ],
+    "transactionId": "jMfZZVxVeXPMqG3IMz5A",
+    "lastMessage": "📎 contrat_transaction_jMfZZVxVeXPMqG3IMz5A.pdf",
+    "lastMessageAt": 1772720037975,
+    "lastMessageSenderId": "wilfdaub",
+    "createdAt": 1772719831237,
+    "messages": [
+      {
+        "id": "msg-1772719831237",
+        "senderId": "wilfdaub",
+        "text": "Conversation démarrée pour la transaction jMfZZVxVeXPMqG3IMz5A",
+        "createdAt": 1772719831237,
+        "type": "text",
+        "seenBy": [
+          "wilfdaub"
+        ]
+      },
+      {
+        "id": "FH6OSgsjb9fafxmxpHl5",
+        "senderId": "wilfdaub",
+        "text": "📄 Contrat généré automatiquement (étape Signer contrat).",
+        "createdAt": 1772720037975,
+        "type": "attachment",
+        "seenBy": [
+          "wilfdaub"
+        ],
+        "reference": "https://firebasestorage.googleapis.com/v0/b/midgen-u6gv0i.firebasestorage.app/o/conversations%2F9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__jMfZZVxVeXPMqG3IMz5A%2Ffiles%2F1772720037470_contrat_transaction_jMfZZVxVeXPMqG3IMz5A.pdf?alt=media&token=5719713e-1335-4a87-b2c1-71321b74824e",
+        "attachmentName": "contrat_transaction_jMfZZVxVeXPMqG3IMz5A.pdf",
+        "attachmentType": "application/pdf",
+        "attachmentSize": 2422
+      }
+    ]
   }
 ]

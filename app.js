@@ -165,6 +165,72 @@ function toMillis(value) {
     if (typeof value?.seconds === 'number') return value.seconds * 1000;
     return null;
 }
+
+const TRANSACTION_STEPPER_STEPS = [
+    'En attente',
+    'Configurer',
+    'Valider contrat',
+    'Signer contrat',
+    'Déposer les fonds',
+    'Déposer les documents',
+    'Garantie',
+    'Noter',
+    'Terminer'
+];
+
+function getEscrowStepperIndex(status) {
+    const normalizedStatus = String(status || '').trim().toLowerCase();
+    const directIndex = TRANSACTION_STEPPER_STEPS.findIndex(step => step.toLowerCase() === normalizedStatus);
+    if (directIndex >= 0) return directIndex;
+
+    switch (status) {
+        case 'En attente': return 0;
+        case 'Accepté': return 3;
+        case 'LOCKED': return 5;
+        case 'DISPUTE': return 6;
+        case 'RELEASED': return 8;
+        case 'REFUNDED': return 8;
+        case 'Refusé': return 0;
+        default: return 0;
+    }
+}
+
+function renderEscrowStatusStepper(status) {
+    const currentIndex = getEscrowStepperIndex(status);
+
+    return TRANSACTION_STEPPER_STEPS.map((step, index) => {
+        const stepStateClass = index < currentIndex
+            ? 'status-step done'
+            : index === currentIndex
+                ? 'status-step current'
+                : 'status-step todo';
+
+        const indicator = index < currentIndex ? '✓' : String(index + 1);
+
+        return `
+            <div class="${stepStateClass}">
+                <div class="status-step-index">${indicator}</div>
+                <div class="status-step-label">${step}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function isChatEnabledForStatus(status) {
+    return getEscrowStepperIndex(status) >= 1;
+}
+
+function scrollToDetailBlock(blockId) {
+    const block = document.getElementById(blockId);
+    if (!block) return;
+
+    block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const focusTarget = block.querySelector('textarea, input, button');
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+        focusTarget.focus({ preventScroll: true });
+    }
+}
+
 const PAGE_TABS = {
     'dashboard':     'index.html',
     'escrows':       'transactions.html',
@@ -389,6 +455,53 @@ async function updateTransactionWalletsInDatabase(dbTransactionId, walletVendeur
     if (!response.ok || !payload.ok) {
         throw new Error(payload.message || 'Impossible de mettre à jour les wallets vendeur en base.');
     }
+}
+
+async function updateTransactionEngagementsInDatabase(dbTransactionId, engagementAcheteur, engagementVendeur) {
+    if (!dbTransactionId) return;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/engagements`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engagementAcheteur, engagementVendeur })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour les engagements en base.');
+    }
+}
+
+async function updateTransactionContractValidationInDatabase(dbTransactionId, validationAcheteur, validationVendeur) {
+    if (!dbTransactionId) return;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/validation-contrat`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ validationAcheteur, validationVendeur })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour la validation du contrat en base.');
+    }
+}
+
+async function generateContractPdfInDatabase(dbTransactionId) {
+    if (!dbTransactionId) return null;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/generate-contract-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderIdLogin: AppData.currentUser?.id || '' })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de générer le contrat PDF.');
+    }
+
+    return payload;
 }
 
 async function ensureConversationForTransaction({ transactionId, buyerIdLogin, sellerIdLogin, senderIdLogin }) {
@@ -712,8 +825,8 @@ async function renderEscrowConversationWindow(escrow) {
     const chatEl = document.getElementById('detail-chat-block');
     if (!chatEl) return;
 
-    if (escrow.status !== 'Accepté') {
-        chatEl.innerHTML = `<div class="alert alert-info">ℹ️ Le tchat sera disponible après acceptation de la transaction.</div>`;
+    if (!isChatEnabledForStatus(escrow.status)) {
+        chatEl.innerHTML = `<div class="alert alert-info">ℹ️ Le tchat sera disponible à partir de l'étape Configurer.</div>`;
         return;
     }
 
@@ -885,6 +998,12 @@ async function loadTransactionsFromDatabase() {
                 initiatorIdLogin: initiatorId,
                 buyerIdLogin: buyerId,
                 sellerIdLogin: sellerId,
+                engagementText: String(transaction.engagementVendeur || '').trim(),
+                engagementBuyerText: String(transaction.engagementAcheteur || '').trim(),
+                sellerEngagementSaved: !!String(transaction.engagementVendeur || '').trim(),
+                buyerEngagementSaved: !!String(transaction.engagementAcheteur || '').trim(),
+                contractValidatedBuyer: !!transaction.validationAcheteur,
+                contractValidatedSeller: !!transaction.validationVendeur,
                 sellerWalletAddress: String(transaction.walletVendeurEvm || '').trim(),
                 sellerWalletConnected: !!String(transaction.walletVendeurEvm || '').trim(),
                 sellerSolanaWalletAddress: String(transaction.walletVendeurPhantom || '').trim(),
@@ -984,6 +1103,12 @@ async function openSharedTransactionFromUrl() {
                         initiatorIdLogin: initiatorId,
                         buyerIdLogin: buyerId,
                         sellerIdLogin: sellerId,
+                        engagementText: String(transaction.engagementVendeur || '').trim(),
+                        engagementBuyerText: String(transaction.engagementAcheteur || '').trim(),
+                        sellerEngagementSaved: !!String(transaction.engagementVendeur || '').trim(),
+                        buyerEngagementSaved: !!String(transaction.engagementAcheteur || '').trim(),
+                        contractValidatedBuyer: !!transaction.validationAcheteur,
+                        contractValidatedSeller: !!transaction.validationVendeur,
                         sellerWalletAddress: String(transaction.walletVendeurEvm || '').trim(),
                         sellerWalletConnected: !!String(transaction.walletVendeurEvm || '').trim(),
                         sellerSolanaWalletAddress: String(transaction.walletVendeurPhantom || '').trim(),
@@ -1426,6 +1551,7 @@ async function showEscrowDetail(escrowId) {
     const isBuyerUser = escrow.buyerIdLogin
         ? String(escrow.buyerIdLogin) === String(AppData.currentUser.id)
         : String(escrow.buyer || '') === String(AppData.currentUser.name || '');
+    const isContractValidationOrLater = getEscrowStepperIndex(escrow.status) >= 2;
 
     const cryptoAmount = (escrow.amount / cryptoPrices[escrow.crypto]).toFixed(3);
     const commission   = (escrow.amount * 0.05).toFixed(2);
@@ -1433,7 +1559,7 @@ async function showEscrowDetail(escrowId) {
 
     document.getElementById('detail-id').textContent            = escrow.title || escrow.description || 'Transaction';
     const detailAmountEl = document.getElementById('detail-amount');
-    if (isInitiator) {
+    if (isInitiator && !isContractValidationOrLater) {
         detailAmountEl.innerHTML = `
             <div style="display:flex; gap:0.4rem; align-items:center; justify-content:flex-end;">
                 <input id="detail-amount-input" type="number" min="0.01" step="0.01" value="${Number(escrow.amount || 0).toFixed(2)}" style="max-width:130px; text-align:right;">
@@ -1453,10 +1579,23 @@ async function showEscrowDetail(escrowId) {
         REFUNDED: '💰 REMBOURSÉ',
         'En attente': '⏱️ EN ATTENTE',
         'Accepté': '✅ ACCEPTÉ',
-        'Refusé':  '❌ REFUSÉ'
+        'Refusé':  '❌ REFUSÉ',
+        'Configurer': '🛠️ CONFIGURER',
+        'Valider contrat': '📋 VALIDER CONTRAT',
+        'Signer contrat': '✍️ SIGNER CONTRAT',
+        'Déposer les fonds': '💰 DÉPOSER LES FONDS',
+        'Déposer les documents': '📄 DÉPOSER LES DOCUMENTS',
+        'Garantie': '🛡️ GARANTIE',
+        'Noter': '⭐ NOTER',
+        'Terminer': '🏁 TERMINER'
     };
     document.getElementById('detail-status').textContent =
-        statusMap[escrow.status] || '⏱️ EN ATTENTE';
+        statusMap[escrow.status] || String(escrow.status || 'En attente');
+
+    const stepperEl = document.getElementById('detail-status-stepper');
+    if (stepperEl) {
+        stepperEl.innerHTML = renderEscrowStatusStepper(escrow.status);
+    }
 
     document.getElementById('detail-expires').textContent = new Date(escrow.expires).toLocaleString('fr-FR');
 
@@ -1518,26 +1657,26 @@ async function showEscrowDetail(escrowId) {
     const sellerBlockEl = document.getElementById('detail-seller-block');
     if (sellerBlockEl) {
         sellerBlockEl.innerHTML = `
-            ${isSellerUser ? `<button class="button ${escrow.sellerWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerWallet(${escrow.id})" style="max-width:220px; margin-bottom:0.6rem;">🔌 Connect MetaMask</button>` : ''}
-            ${isSellerUser ? `<button class="button ${escrow.sellerSolanaWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerPhantomWallet(${escrow.id})" style="max-width:280px; margin-bottom:0.6rem;">👻 Connect Phantom (Solana)</button>` : ''}
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerWallet(${escrow.id})" style="max-width:220px; margin-bottom:0.6rem;">🔌 Connect MetaMask</button>` : ''}
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerSolanaWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerPhantomWallet(${escrow.id})" style="max-width:280px; margin-bottom:0.6rem;">👻 Connect Phantom (Solana)</button>` : ''}
             <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.35rem;">
                 <label style="font-size:0.82rem;">Wallet EVM</label>
                 <div class="input-with-icon">
-                    <input id="detail-wallet-evm-input" type="text" ${isSellerUser ? '' : 'readonly'} placeholder="0x..." value="${escapeHtml(sellerEvmWalletValue)}">
-                    ${isSellerUser ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'evm')" title="Coller l'ID wallet EVM">📋</button>` : ''}
+                    <input id="detail-wallet-evm-input" type="text" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="0x..." value="${escapeHtml(sellerEvmWalletValue)}">
+                    ${isSellerUser && !isContractValidationOrLater ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'evm')" title="Coller l'ID wallet EVM">📋</button>` : ''}
                 </div>
             </div>
             <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.5rem;">
                 <label style="font-size:0.82rem;">Wallet Phantom (Solana)</label>
                 <div class="input-with-icon">
-                    <input id="detail-wallet-phantom-input" type="text" ${isSellerUser ? '' : 'readonly'} placeholder="Adresse Solana..." value="${escapeHtml(sellerPhantomWalletValue)}">
-                    ${isSellerUser ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'phantom')" title="Coller l'ID wallet Phantom">📋</button>` : ''}
+                    <input id="detail-wallet-phantom-input" type="text" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Adresse Solana..." value="${escapeHtml(sellerPhantomWalletValue)}">
+                    ${isSellerUser && !isContractValidationOrLater ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'phantom')" title="Coller l'ID wallet Phantom">📋</button>` : ''}
                 </div>
             </div>
-            ${isSellerUser ? `<button class="button ${escrow.walletIdsSaved ? 'secondary' : 'success'}" type="button" onclick="saveSellerWalletIds(${escrow.id})" style="max-width:250px; margin-bottom:0.6rem;">Enregistrer IDs portefeuille</button>` : ''}
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.walletIdsSaved ? 'secondary' : 'success'}" type="button" onclick="saveSellerWalletIds(${escrow.id})" style="max-width:250px; margin-bottom:0.6rem;">Enregistrer IDs portefeuille</button>` : ''}
             <div class="card-title" style="margin-top:0.7rem;">Engagement vendeur</div>
-            <textarea id="detail-engagement-seller-input" ${isSellerUser ? '' : 'readonly'} placeholder="Saisir un engagement..." style="min-height:110px;">${escapeHtml(engagementSellerValue)}</textarea>
-            ${isSellerUser ? `<button class="button success" type="button" onclick="saveEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+            <textarea id="detail-engagement-seller-input" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement..." style="min-height:110px;">${escapeHtml(engagementSellerValue)}</textarea>
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerEngagementSaved ? 'secondary' : 'success'}" type="button" onclick="saveEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
         `;
     }
 
@@ -1545,13 +1684,65 @@ async function showEscrowDetail(escrowId) {
     if (buyerBlockEl) {
         buyerBlockEl.innerHTML = `
             <div class="card-title" style="margin-top:0.2rem;">Engagement acheteur</div>
-            <textarea id="detail-engagement-buyer-input" ${isBuyerUser ? '' : 'readonly'} placeholder="Saisir un engagement acheteur..." style="min-height:110px;">${escapeHtml(engagementBuyerValue)}</textarea>
-            ${isBuyerUser ? `<button class="button success" type="button" onclick="saveBuyerEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+            <textarea id="detail-engagement-buyer-input" ${(isBuyerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement acheteur..." style="min-height:110px;">${escapeHtml(engagementBuyerValue)}</textarea>
+            ${isBuyerUser && !isContractValidationOrLater ? `<button class="button ${escrow.buyerEngagementSaved ? 'secondary' : 'success'}" type="button" onclick="saveBuyerEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
         `;
     }
 
     // Actions
     let actionsHtml = '';
+
+    if (escrow.status === 'Configurer') {
+        const buyerEngagementDone = !!String(escrow.engagementBuyerText || '').trim() || !!escrow.buyerEngagementSaved;
+        const sellerEngagementDone = !!String(escrow.engagementText || '').trim() || !!escrow.sellerEngagementSaved;
+        const sellerWalletDone = !!escrow.walletIdsSaved
+            || !!String(escrow.sellerWalletAddress || '').trim()
+            || !!String(escrow.sellerSolanaWalletAddress || '').trim();
+        const buyerActionEnabled = !!isBuyerUser;
+        const sellerActionEnabled = !!isSellerUser;
+
+        actionsHtml += `
+            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">🧭 Actions de configuration</div>
+            <div class="config-checklist">
+                <div class="config-checklist-item">
+                    <button type="button" class="inline-link-button" onclick="scrollToDetailBlock('detail-buyer-block')" ${buyerActionEnabled ? '' : 'disabled'}>Acheteur : Remplir les engagements</button>
+                    <span class="config-check">${buyerEngagementDone ? '✅' : '⬜'}</span>
+                </div>
+                <div class="config-checklist-item">
+                    <button type="button" class="inline-link-button" onclick="scrollToDetailBlock('detail-seller-block')" ${sellerActionEnabled ? '' : 'disabled'}>Vendeur : Remplir les engagements</button>
+                    <span class="config-check">${sellerEngagementDone ? '✅' : '⬜'}</span>
+                </div>
+                <div class="config-checklist-item">
+                    <button type="button" class="inline-link-button" onclick="scrollToDetailBlock('detail-seller-block')" ${sellerActionEnabled ? '' : 'disabled'}>Vendeur : Fournir l'adresse du wallet</button>
+                    <span class="config-check">${sellerWalletDone ? '✅' : '⬜'}</span>
+                </div>
+            </div>
+            <div class="divider"></div>
+        `;
+    }
+
+    if (escrow.status === 'Valider contrat') {
+        const buyerValidated = !!escrow.contractValidatedBuyer;
+        const sellerValidated = !!escrow.contractValidatedSeller;
+        const canValidateBuyer = isBuyerUser && !buyerValidated;
+        const canValidateSeller = isSellerUser && !sellerValidated;
+
+        actionsHtml += `
+            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">📋 Contrat à valider</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <button class="button ${buyerValidated ? 'secondary' : 'success'}" type="button" onclick="validateContractByRole(${escrow.id}, 'buyer')" ${canValidateBuyer ? '' : 'disabled'}>
+                    ${buyerValidated ? '✅ Validé Acheteur' : 'Valider Acheteur'}
+                </button>
+                <button class="button ${sellerValidated ? 'secondary' : 'success'}" type="button" onclick="validateContractByRole(${escrow.id}, 'seller')" ${canValidateSeller ? '' : 'disabled'}>
+                    ${sellerValidated ? '✅ Validé Vendeur' : 'Valider Vendeur'}
+                </button>
+            </div>
+            <div class="alert alert-info" style="margin-top:0.7rem; margin-bottom:0.7rem;">
+                ℹ️ La validation verrouille les blocs vendeur/acheteur et la modification du montant.
+            </div>
+            <div class="divider"></div>
+        `;
+    }
 
     if (escrow.status === 'En attente' && !isInitiator) {
         actionsHtml = `
@@ -1572,7 +1763,7 @@ async function showEscrowDetail(escrowId) {
     } else if (escrow.status === 'LOCKED' && escrow.seller === AppData.currentUser.name) {
         actionsHtml = `<div class="alert alert-info">ℹ️ Vous êtes le vendeur. En attente de confirmation acheteur.</div>`;
     }
-    if (escrow.status !== 'Accepté') {
+    if (escrow.status === 'En attente') {
         actionsHtml += `
             <div class="divider"></div>
             <div class="form-group" style="margin-top:0.5rem;">
@@ -1739,14 +1930,138 @@ async function saveSellerWalletIds(escrowId, withSuccessPopup = true) {
     escrow.sellerSolanaWalletConnected = !!phantomValue;
     escrow.walletIdsSaved = true;
 
+    await tryAdvanceConfigurerStatus(escrow);
+
     saveData();
+    showEscrowDetail(escrowId);
 
     if (withSuccessPopup) {
         alert('✅ IDs portefeuille enregistrés.');
     }
 }
 
-function saveEngagementText(escrowId) {
+function isConfigurerChecklistComplete(escrow) {
+    const buyerEngagementDone = !!String(escrow?.engagementBuyerText || '').trim() || !!escrow?.buyerEngagementSaved;
+    const sellerEngagementDone = !!String(escrow?.engagementText || '').trim() || !!escrow?.sellerEngagementSaved;
+    const sellerWalletDone = !!escrow?.walletIdsSaved
+        || !!String(escrow?.sellerWalletAddress || '').trim()
+        || !!String(escrow?.sellerSolanaWalletAddress || '').trim();
+
+    return buyerEngagementDone && sellerEngagementDone && sellerWalletDone;
+}
+
+async function tryAdvanceConfigurerStatus(escrow) {
+    if (!escrow || escrow.status !== 'Configurer') return false;
+    if (!isConfigurerChecklistComplete(escrow)) return false;
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Valider contrat');
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return false;
+        }
+    }
+
+    escrow.status = 'Valider contrat';
+    escrow.timeline = Array.isArray(escrow.timeline) ? escrow.timeline : [];
+    escrow.timeline.push({ status: 'contract-validation', time: Date.now(), label: 'Configuration terminée — contrat à valider' });
+    saveData();
+    return true;
+}
+
+async function tryAdvanceSignerContratStatus(escrow) {
+    if (!escrow || escrow.status !== 'Valider contrat') return false;
+    if (!escrow.contractValidatedBuyer || !escrow.contractValidatedSeller) return false;
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Signer contrat');
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return false;
+        }
+    }
+
+    escrow.status = 'Signer contrat';
+    escrow.timeline = Array.isArray(escrow.timeline) ? escrow.timeline : [];
+    escrow.timeline.push({ status: 'contract-signed-step', time: Date.now(), label: 'Les deux parties ont validé — contrat à signer' });
+
+    if (escrow.dbTransactionId) {
+        try {
+            const payload = await generateContractPdfInDatabase(escrow.dbTransactionId);
+            if (payload?.conversationId && !escrow.conversationId) {
+                escrow.conversationId = payload.conversationId;
+            }
+        } catch (error) {
+            alert(`⚠️ Statut mis à jour, mais contrat PDF non généré: ${error.message}`);
+        }
+    }
+
+    saveData();
+    return true;
+}
+
+async function validateContractByRole(escrowId, role) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    if (escrow.status !== 'Valider contrat') {
+        alert('❌ Cette action est disponible uniquement à l\'étape Valider contrat.');
+        return;
+    }
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+    const isBuyerUser = escrow.buyerIdLogin
+        ? String(escrow.buyerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.buyer || '') === String(AppData.currentUser.name || '');
+
+    if (role === 'buyer' && !isBuyerUser) {
+        alert('❌ Seul l\'acheteur peut valider côté acheteur.');
+        return;
+    }
+
+    if (role === 'seller' && !isSellerUser) {
+        alert('❌ Seul le vendeur peut valider côté vendeur.');
+        return;
+    }
+
+    if (role === 'buyer') {
+        escrow.contractValidatedBuyer = true;
+    } else if (role === 'seller') {
+        escrow.contractValidatedSeller = true;
+    } else {
+        return;
+    }
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionContractValidationInDatabase(
+                escrow.dbTransactionId,
+                !!escrow.contractValidatedBuyer,
+                !!escrow.contractValidatedSeller
+            );
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.timeline = Array.isArray(escrow.timeline) ? escrow.timeline : [];
+    escrow.timeline.push({
+        status: role === 'buyer' ? 'buyer-contract-validated' : 'seller-contract-validated',
+        time: Date.now(),
+        label: role === 'buyer' ? 'Validation acheteur effectuée' : 'Validation vendeur effectuée'
+    });
+
+    await tryAdvanceSignerContratStatus(escrow);
+    saveData();
+    showEscrowDetail(escrowId);
+}
+
+async function saveEngagementText(escrowId) {
     const escrow = AppData.escrows.find(e => e.id === escrowId);
     if (!escrow) return;
 
@@ -1762,12 +2077,27 @@ function saveEngagementText(escrowId) {
     const inputEl = document.getElementById('detail-engagement-seller-input');
     if (!inputEl) return;
 
-    escrow.engagementText = String(inputEl.value || '').trim();
+    const sellerEngagementValue = String(inputEl.value || '').trim();
+    const buyerEngagementValue = String(escrow.engagementBuyerText || '').trim();
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionEngagementsInDatabase(escrow.dbTransactionId, buyerEngagementValue, sellerEngagementValue);
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.engagementText = sellerEngagementValue;
+    escrow.sellerEngagementSaved = true;
+    await tryAdvanceConfigurerStatus(escrow);
     saveData();
+    showEscrowDetail(escrowId);
     alert('✅ Engagement enregistré.');
 }
 
-function saveBuyerEngagementText(escrowId) {
+async function saveBuyerEngagementText(escrowId) {
     const escrow = AppData.escrows.find(e => e.id === escrowId);
     if (!escrow) return;
 
@@ -1783,8 +2113,23 @@ function saveBuyerEngagementText(escrowId) {
     const inputEl = document.getElementById('detail-engagement-buyer-input');
     if (!inputEl) return;
 
-    escrow.engagementBuyerText = String(inputEl.value || '').trim();
+    const buyerEngagementValue = String(inputEl.value || '').trim();
+    const sellerEngagementValue = String(escrow.engagementText || '').trim();
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionEngagementsInDatabase(escrow.dbTransactionId, buyerEngagementValue, sellerEngagementValue);
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.engagementBuyerText = buyerEngagementValue;
+    escrow.buyerEngagementSaved = true;
+    await tryAdvanceConfigurerStatus(escrow);
     saveData();
+    showEscrowDetail(escrowId);
     alert('✅ Engagement acheteur enregistré.');
 }
 
@@ -1844,7 +2189,7 @@ async function acceptTransaction(escrowId) {
 
     if (escrow.dbTransactionId) {
         try {
-            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Accepté');
+            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Configurer');
         } catch (error) {
             alert(`❌ ${error.message}`);
             return;
@@ -1863,7 +2208,7 @@ async function acceptTransaction(escrowId) {
         alert(`⚠️ Transaction acceptée, mais chat non créé: ${error.message}`);
     }
 
-    escrow.status = 'Accepté';
+    escrow.status = 'Configurer';
     escrow.timeline.push({ status: 'accepted', time: Date.now(), label: 'Transaction acceptée par la contrepartie' });
     saveData();
     showEscrowDetail(escrowId);
@@ -1964,9 +2309,15 @@ function displayEscrows() {
     const listEl = document.getElementById('escrows-list');
     if (!listEl) return;
 
+    const sortedEscrows = [...AppData.escrows].sort((a, b) => {
+        const aCreated = toMillis(a?.datecreation) ?? toMillis(a?.created) ?? 0;
+        const bCreated = toMillis(b?.datecreation) ?? toMillis(b?.created) ?? 0;
+        return bCreated - aCreated;
+    });
+
     const html = AppData.escrows.length === 0
         ? '<p style="color: #94A3B8; padding: 1.5rem;">Aucune transaction</p>'
-        : AppData.escrows.map(e => _escrowItemHtml(e)).join('');
+        : sortedEscrows.map(e => _escrowItemHtml(e)).join('');
 
     listEl.innerHTML = html;
 }

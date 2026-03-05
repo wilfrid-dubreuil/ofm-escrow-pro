@@ -444,6 +444,51 @@ textarea {
 .alert-warning { background: rgba(245, 158, 11, 0.1);  border: 1px solid rgba(245, 158, 11, 0.3); color: #FBBF24; }
 .alert-danger  { background: rgba(239, 68, 68, 0.1);   border: 1px solid rgba(239, 68, 68, 0.3);  color: #F87171; }
 
+/* ---- CONFIG CHECKLIST ---- */
+.config-checklist {
+    display: grid;
+    gap: 0.6rem;
+    margin-bottom: 0.8rem;
+}
+
+.config-checklist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: rgba(71, 85, 105, 0.12);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+}
+
+.inline-link-button {
+    border: none;
+    background: transparent;
+    color: #60A5FA;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.92rem;
+    text-align: left;
+    padding: 0;
+}
+
+.inline-link-button:hover {
+    color: #93C5FD;
+}
+
+.inline-link-button:disabled {
+    color: #64748B;
+    text-decoration: none;
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+.config-check {
+    font-size: 1rem;
+    line-height: 1;
+}
+
 /* ---- TIMELINE ---- */
 .timeline { position: relative; }
 
@@ -500,6 +545,74 @@ textarea {
     text-align: right;
     color: #94A3B8;
     font-size: 0.8rem;
+}
+
+/* ---- STATUS STEPPER ---- */
+.status-stepper {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(90px, 1fr));
+    gap: 0.55rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+}
+
+.status-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.35rem;
+    border-radius: 8px;
+    border: 1px solid rgba(71, 85, 105, 0.35);
+    background: rgba(71, 85, 105, 0.12);
+    min-width: 90px;
+}
+
+.status-step-index {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(71, 85, 105, 0.35);
+    color: #E2E8F0;
+}
+
+.status-step-label {
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: #CBD5E1;
+}
+
+.status-step.done {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.status-step.done .status-step-index {
+    background: rgba(16, 185, 129, 0.3);
+    color: #10B981;
+}
+
+.status-step.current {
+    border-color: rgba(59, 130, 246, 0.55);
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.status-step.current .status-step-index {
+    background: rgba(59, 130, 246, 0.35);
+    color: #60A5FA;
+}
+
+@media (max-width: 900px) {
+    .status-stepper {
+        grid-template-columns: repeat(9, minmax(120px, 1fr));
+    }
 }
 
 /* ---- FEATURES GRID ---- */
