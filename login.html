@@ -295,6 +295,15 @@
             <input type="text" id="login-handle" placeholder="Ex : pierre110" autocomplete="username" oninput="normalizeHandleInput()">
         </div>
 
+        <div class="form-group field-name" id="fieldReferral" style="display:none;">
+            <label for="login-referral">Code parrain (handle existant)</label>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input type="text" id="login-referral" placeholder="Ex : pierre110" autocomplete="off" oninput="normalizeReferralInput(); clearReferralStatus();" onblur="verifyReferralHandle(false)">
+                <button type="button" class="login-tab" style="max-width:110px; border-radius:8px; border:1px solid rgba(71,85,105,0.35);" onclick="verifyReferralHandle(true)">Vérifier</button>
+            </div>
+            <div id="referral-status" class="seller-status" style="display:none; margin-top:0.5rem;"></div>
+        </div>
+
         <!-- Email -->
         <div class="form-group">
             <label for="login-email">Adresse e-mail</label>
@@ -332,6 +341,7 @@
     const API_BASE_URL = window.location.origin && window.location.origin.startsWith('http')
         ? window.location.origin
         : 'http://localhost:3001';
+    const DEFAULT_REFERRAL_HANDLE = 'actarus';
 
     let isCreatingAccount = false;
 
@@ -349,9 +359,20 @@
         document.getElementById('tab-register').classList.toggle('active', mode === 'register');
         document.getElementById('fieldName').style.display = mode === 'register' ? 'block' : 'none';
         document.getElementById('fieldHandle').style.display = mode === 'register' ? 'block' : 'none';
+        document.getElementById('fieldReferral').style.display = mode === 'register' ? 'block' : 'none';
         document.getElementById('btnSubmit').textContent = mode === 'login' ? 'Se connecter' : 'Créer mon compte';
         document.getElementById('login-password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+
+        if (mode === 'register') {
+            const referralEl = document.getElementById('login-referral');
+            if (referralEl && !String(referralEl.value || '').trim()) {
+                referralEl.value = DEFAULT_REFERRAL_HANDLE;
+            }
+            applyReferralDefaultStyle();
+        }
+
         clearAlert();
+        clearReferralStatus();
         updatePreview();
     }
 
@@ -379,6 +400,74 @@
         const handleEl = document.getElementById('login-handle');
         if (!handleEl) return;
         handleEl.value = handleEl.value.toLowerCase();
+    }
+
+    function normalizeReferralInput() {
+        const referralEl = document.getElementById('login-referral');
+        if (!referralEl) return;
+        referralEl.value = referralEl.value.toLowerCase();
+        applyReferralDefaultStyle();
+    }
+
+    function applyReferralDefaultStyle() {
+        const referralEl = document.getElementById('login-referral');
+        if (!referralEl) return;
+        const normalized = String(referralEl.value || '').trim().toLowerCase();
+        referralEl.style.color = normalized === DEFAULT_REFERRAL_HANDLE ? '#94A3B8' : '#E2E8F0';
+    }
+
+    function setReferralStatus(type, message) {
+        const statusEl = document.getElementById('referral-status');
+        if (!statusEl) return;
+
+        statusEl.style.display = 'flex';
+        statusEl.className = `seller-status ${type}`;
+        statusEl.textContent = message;
+    }
+
+    function clearReferralStatus() {
+        const statusEl = document.getElementById('referral-status');
+        if (!statusEl) return;
+        statusEl.style.display = 'none';
+        statusEl.className = 'seller-status';
+        statusEl.textContent = '';
+    }
+
+    async function verifyReferralHandle(showErrorIfEmpty = true) {
+        const referralEl = document.getElementById('login-referral');
+        if (!referralEl) return true;
+
+        const raw = String(referralEl.value || '').trim();
+        const normalized = (raw.startsWith('@') ? raw.slice(1) : raw).toLowerCase();
+        referralEl.value = normalized;
+        applyReferralDefaultStyle();
+
+        if (!normalized) {
+            referralEl.value = DEFAULT_REFERRAL_HANDLE;
+            applyReferralDefaultStyle();
+        }
+
+        try {
+            setReferralStatus('loading', '⏳ Vérification du code parrain...');
+            const response = await fetch(`${API_BASE_URL}/api/users/handle/${encodeURIComponent(normalized)}`);
+            const payload = await response.json().catch(() => ({}));
+
+            if (response.ok && payload.ok && payload.user) {
+                const displayName = payload.user.Name || payload.user.mail || payload.user.email || normalized;
+                setReferralStatus('success', `✅ Parrain trouvé: ${displayName} (@${normalized})`);
+                return true;
+            }
+
+            if (response.status === 404) {
+                setReferralStatus('error', `❌ Aucun utilisateur trouvé avec @${normalized}`);
+                return false;
+            }
+
+            throw new Error(payload.message || 'Impossible de vérifier le code parrain.');
+        } catch (error) {
+            setReferralStatus('error', `❌ ${error.message || 'Erreur de vérification.'}`);
+            return false;
+        }
     }
 
     // ---- Auth ----
@@ -524,6 +613,20 @@
     async function persistUserProfile(userPayload) {
         try {
             await db.collection('users').doc(userPayload.id_login).set(userPayload);
+
+            const referralHandle = String(userPayload.parrainHandle || '').trim().toLowerCase();
+            if (referralHandle) {
+                await db.collection('users')
+                    .doc(userPayload.id_login)
+                    .collection('affiliations')
+                    .doc('active')
+                    .set({
+                        parrainHandle: referralHandle,
+                        ['dateDébut']: firebase.firestore.FieldValue.serverTimestamp(),
+                        ['dateFin']: null
+                    }, { merge: true });
+            }
+
             return;
         } catch (error) {
             const isPermissionError = error && (
@@ -550,6 +653,7 @@
         clearAlert();
         const name     = document.getElementById('login-name').value.trim();
         const handle   = document.getElementById('login-handle').value.trim();
+        const referral = document.getElementById('login-referral').value.trim();
         const email    = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value;
 
@@ -587,6 +691,10 @@
         };
 
         const normalizedHandle = (handle.startsWith('@') ? handle.slice(1) : handle).toLowerCase();
+        const normalizedReferralRaw = (referral.startsWith('@') ? referral.slice(1) : referral).toLowerCase();
+        const normalizedReferral = currentMode === 'register'
+            ? (normalizedReferralRaw || DEFAULT_REFERRAL_HANDLE)
+            : normalizedReferralRaw;
 
         if (currentMode === 'register') {
             try {
@@ -600,12 +708,28 @@
                     return;
                 }
 
+                if (normalizedReferral) {
+                    if (normalizedReferral === normalizedHandle) {
+                        showAlert('Le code parrain ne peut pas être votre propre handle.', 'error');
+                        isCreatingAccount = false;
+                        return;
+                    }
+
+                    const referralIsValid = await verifyReferralHandle(true);
+                    if (!referralIsValid) {
+                        showAlert('Code parrain invalide. Vérifiez le handle du parrain.', 'error');
+                        isCreatingAccount = false;
+                        return;
+                    }
+                }
+
                 const res = await firebase.auth().createUserWithEmailAndPassword(email, password);
                 applyName(res.user);
 
                 await persistUserProfile({
                     Name: name || (email ? email.split('@')[0] : ''),
                     handle: normalizedHandle,
+                    parrainHandle: normalizedReferral,
                     id_login: res.user.uid,
                     mail: email,
                     réputation: 100

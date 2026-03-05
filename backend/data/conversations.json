@@ -693,5 +693,95 @@
         "attachmentSize": 2422
       }
     ]
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__gAvzbp9G0rheopu5gqkD",
+    "participants": [
+      "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+      "wVwSazUXDrf05jmQIDh4K2Nczzh1"
+    ],
+    "transactionId": "gAvzbp9G0rheopu5gqkD",
+    "lastMessage": "📎 contrat.pdf",
+    "lastMessageAt": 1772721788341,
+    "lastMessageSenderId": "testwill",
+    "createdAt": 1772721709015,
+    "messages": [
+      {
+        "id": "msg-1772721709015",
+        "senderId": "testwill",
+        "text": "Conversation démarrée pour la transaction gAvzbp9G0rheopu5gqkD",
+        "createdAt": 1772721709015,
+        "type": "text",
+        "seenBy": [
+          "testwill"
+        ]
+      },
+      {
+        "id": "3YMibJY8xVCQTqgwChia",
+        "senderId": "testwill",
+        "text": "📄 Contrat généré automatiquement (étape Signer contrat).",
+        "createdAt": 1772721788341,
+        "type": "attachment",
+        "seenBy": [
+          "testwill"
+        ],
+        "reference": "https://firebasestorage.googleapis.com/v0/b/midgen-u6gv0i.firebasestorage.app/o/conversations%2F9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__gAvzbp9G0rheopu5gqkD%2Ffiles%2F1772721787782_contrat.pdf?alt=media&token=80ab278e-b797-4363-9ccf-d7ade148bb71",
+        "attachmentName": "contrat.pdf",
+        "attachmentType": "application/pdf",
+        "attachmentSize": 2352
+      }
+    ]
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__cfo5uwwkAjGvLgcIIEHy",
+    "participants": [
+      "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+      "wVwSazUXDrf05jmQIDh4K2Nczzh1"
+    ],
+    "transactionId": "cfo5uwwkAjGvLgcIIEHy",
+    "lastMessage": "📎 contratsigne.pdf",
+    "lastMessageAt": 1772726610948,
+    "lastMessageSenderId": "wilfdaub",
+    "createdAt": 1772724929117,
+    "messages": [
+      {
+        "id": "msg-1772724929117",
+        "senderId": "testwill",
+        "text": "Conversation démarrée pour la transaction cfo5uwwkAjGvLgcIIEHy",
+        "createdAt": 1772724929117,
+        "type": "text",
+        "seenBy": [
+          "testwill"
+        ]
+      },
+      {
+        "id": "VqpfajYbmzh70if3cdPo",
+        "senderId": "testwill",
+        "text": "📄 Contrat généré automatiquement (étape Signer contrat).",
+        "createdAt": 1772725026462,
+        "type": "attachment",
+        "seenBy": [
+          "testwill"
+        ],
+        "reference": "https://firebasestorage.googleapis.com/v0/b/midgen-u6gv0i.firebasestorage.app/o/conversations%2F9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__cfo5uwwkAjGvLgcIIEHy%2Ffiles%2F1772725026003_contrat.pdf?alt=media&token=bd405bc9-3ab4-4de7-b592-eafa1839fe73",
+        "attachmentName": "contrat.pdf",
+        "attachmentType": "application/pdf",
+        "attachmentSize": 2542
+      },
+      {
+        "id": "DfYVci4vZLJ684if41YP",
+        "senderId": "wilfdaub",
+        "text": "📄 Contrat signé généré. Hash blockchain: a6480f3581792d859843c6126b266b6c590ecd6c73c612a00e1a5faa090b693a",
+        "createdAt": 1772726610948,
+        "type": "attachment",
+        "seenBy": [
+          "wilfdaub"
+        ],
+        "reference": "https://firebasestorage.googleapis.com/v0/b/midgen-u6gv0i.firebasestorage.app/o/conversations%2F9tVt2veKlKUmGaMQ8usoBbxBOH93__wVwSazUXDrf05jmQIDh4K2Nczzh1__tx__cfo5uwwkAjGvLgcIIEHy%2Ffiles%2F1772726611573_contratsigne.pdf?alt=media&token=145dfaca-79d3-4c27-8d40-b2ff492adac4",
+        "attachmentName": "contratsigne.pdf",
+        "attachmentType": "application/pdf",
+        "attachmentSize": 12406
+      }
+    ]
   }
 ]

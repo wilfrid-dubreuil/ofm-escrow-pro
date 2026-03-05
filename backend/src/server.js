@@ -12,6 +12,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const DEFAULT_REFERRAL_HANDLE = 'actarus';
 const FRONTEND_ROOT = path.join(__dirname, '..', '..');
 const USERS_FILE = path.join(__dirname, '..', 'data', 'users.json');
 const TRANSACTIONS_FILE = path.join(__dirname, '..', 'data', 'transactions.json');
@@ -108,6 +109,53 @@ async function readConversationsFile() {
 
 async function writeConversationsFile(conversations) {
   await fs.writeFile(CONVERSATIONS_FILE, JSON.stringify(conversations, null, 2), 'utf8');
+}
+
+async function upsertUserAffiliation({ idLogin, parrainHandle }) {
+  const normalizedReferral = normalizeHandle(parrainHandle);
+  if (!idLogin || !normalizedReferral) return;
+
+  if (adminDb) {
+    const userRef = adminDb.collection('users').doc(idLogin);
+    const affiliationsRef = userRef.collection('affiliations');
+    const now = Date.now();
+
+    const activeSnapshot = await affiliationsRef.where('dateFin', '==', null).get();
+    if (!activeSnapshot.empty) {
+      await Promise.all(activeSnapshot.docs.map(doc => doc.ref.set({
+        dateFin: now
+      }, { merge: true })));
+    }
+
+    await affiliationsRef.add({
+      parrainHandle: normalizedReferral,
+      ['dateDébut']: admin.firestore.FieldValue.serverTimestamp(),
+      ['dateFin']: null
+    });
+  }
+
+  const users = await readUsersFile();
+  const idx = users.findIndex(user => String(user.id_login || user.id || '').trim() === String(idLogin).trim());
+  if (idx >= 0) {
+    const now = Date.now();
+    const existingAffiliations = Array.isArray(users[idx].affiliations) ? users[idx].affiliations : [];
+    const closedAffiliations = existingAffiliations.map(item => {
+      if (item && item.dateFin === null) {
+        return { ...item, dateFin: now };
+      }
+      return item;
+    });
+
+    closedAffiliations.push({
+      parrainHandle: normalizedReferral,
+      ['dateDébut']: now,
+      ['dateFin']: null
+    });
+
+    users[idx].affiliations = closedAffiliations;
+    users[idx].parrainHandle = normalizedReferral;
+    await writeUsersFile(users);
+  }
 }
 
 async function resolveUsersByIdLogin(ids) {
@@ -346,6 +394,98 @@ function buildContractPdfBuffer({ transaction, buyer, seller }) {
   });
 }
 
+function dataUrlToBuffer(dataUrl) {
+  const raw = String(dataUrl || '').trim();
+  if (!raw.startsWith('data:image/')) {
+    throw new Error('Signature invalide (format image attendu).');
+  }
+  const base64Part = raw.includes(',') ? raw.split(',').pop() : '';
+  if (!base64Part) {
+    throw new Error('Signature invalide (données manquantes).');
+  }
+  return Buffer.from(base64Part, 'base64');
+}
+
+function buildSignedContractPdfBuffer({ transaction, buyer, seller, buyerSignatureBuffer, sellerSignatureBuffer, proofHash }) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 42, size: 'A4' });
+    const chunks = [];
+
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const tx = transaction || {};
+    const createdAt = toMillis(tx.datecreation) ?? Date.now();
+    const writeLine = (label, value) => {
+      doc.font('Helvetica-Bold').fontSize(10).text(`${label}: `, { continued: true });
+      doc.font('Helvetica').fontSize(10).text(String(value || '-'));
+    };
+
+    doc.font('Helvetica-Bold').fontSize(18).text('Contrat signé OFM', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.font('Helvetica').fontSize(10).text(`Signé le ${new Date().toLocaleString('fr-FR')}`, { align: 'center' });
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations transaction');
+    doc.moveDown(0.35);
+    writeLine('ID transaction', tx.id || tx.dbTransactionId || '-');
+    writeLine('Titre', tx.titre || 'Transaction');
+    writeLine('Statut', tx.statut || 'Signer contrat');
+    writeLine('Crypto paiement', tx.cryptopaiement || '-');
+    writeLine('Montant', `${Number(tx.montant || 0).toFixed(2)} €`);
+    writeLine('Période de garantie', `${Number(tx.garantieperiode || 0)} heures`);
+    writeLine('Date création', new Date(createdAt).toLocaleString('fr-FR'));
+    writeLine('Initiateur (id_login)', tx.initiateur || '-');
+    writeLine('Wallet vendeur EVM', tx.walletVendeurEvm || '-');
+    writeLine('Wallet vendeur Phantom', tx.walletVendeurPhantom || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Engagement acheteur');
+    doc.moveDown(0.35);
+    writeLine('Texte', tx.engagementAcheteur || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Engagement vendeur');
+    doc.moveDown(0.35);
+    writeLine('Texte', tx.engagementVendeur || '-');
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations acheteur');
+    doc.moveDown(0.35);
+    writeLine('Nom', getUserDisplayName(buyer, tx.acheteur_name || tx.acheteur));
+    writeLine('Email', getUserEmail(buyer, ''));
+    writeLine('Handle', String(buyer?.handle || '').trim() ? `@${normalizeHandle(buyer?.handle)}` : '-');
+    writeLine('Réputation', String(buyer?.['réputation'] ?? buyer?.reputation ?? '-'));
+    doc.moveDown(1);
+
+    doc.font('Helvetica-Bold').fontSize(13).text('Informations vendeur');
+    doc.moveDown(0.35);
+    writeLine('Nom', getUserDisplayName(seller, tx.vendeur_name || tx.vendeur));
+    writeLine('Email', getUserEmail(seller, ''));
+    writeLine('Handle', String(seller?.handle || '').trim() ? `@${normalizeHandle(seller?.handle)}` : '-');
+    writeLine('Réputation', String(seller?.['réputation'] ?? seller?.reputation ?? '-'));
+    doc.moveDown(0.9);
+
+    doc.font('Helvetica-Bold').fontSize(12).text('Signature Acheteur');
+    doc.moveDown(0.2);
+    doc.image(buyerSignatureBuffer, { fit: [260, 95], align: 'left' });
+    doc.moveDown(0.9);
+
+    doc.font('Helvetica-Bold').fontSize(12).text('Signature Vendeur');
+    doc.moveDown(0.2);
+    doc.image(sellerSignatureBuffer, { fit: [260, 95], align: 'left' });
+    doc.moveDown(0.9);
+
+    doc.font('Helvetica-Bold').fontSize(11).text('Preuve juridique (hash blockchain)');
+    doc.moveDown(0.25);
+    doc.font('Helvetica').fontSize(9).text(`Hash: ${proofHash}`);
+    doc.font('Helvetica').fontSize(9).text('Empreinte cryptographique ancrée pour preuve d\'intégrité documentaire.');
+
+    doc.end();
+  });
+}
+
 async function appendConversationMessage({ conversationId, message, lastMessage, lastMessageSenderId }) {
   let found = false;
 
@@ -431,7 +571,16 @@ app.get('/api/users/id-login/:idLogin', async (req, res) => {
     if (adminDb) {
       const doc = await adminDb.collection('users').doc(idLogin).get();
       if (doc.exists) {
-        return res.json({ ok: true, user: { id: doc.id, ...doc.data() } });
+        const userData = { id: doc.id, ...doc.data() };
+        const affiliationsSnapshot = await adminDb
+          .collection('users')
+          .doc(idLogin)
+          .collection('affiliations')
+          .orderBy('dateDébut', 'desc')
+          .get();
+
+        userData.affiliations = affiliationsSnapshot.docs.map(affDoc => ({ id: affDoc.id, ...affDoc.data() }));
+        return res.json({ ok: true, user: userData });
       }
 
       const snapshot = await adminDb
@@ -442,7 +591,16 @@ app.get('/api/users/id-login/:idLogin', async (req, res) => {
 
       if (!snapshot.empty) {
         const found = snapshot.docs[0];
-        return res.json({ ok: true, user: { id: found.id, ...found.data() } });
+        const userData = { id: found.id, ...found.data() };
+        const affiliationsSnapshot = await adminDb
+          .collection('users')
+          .doc(found.id)
+          .collection('affiliations')
+          .orderBy('dateDébut', 'desc')
+          .get();
+
+        userData.affiliations = affiliationsSnapshot.docs.map(affDoc => ({ id: affDoc.id, ...affDoc.data() }));
+        return res.json({ ok: true, user: userData });
       }
     }
 
@@ -463,6 +621,8 @@ app.post('/api/users', async (req, res) => {
   try {
     const name = String(req.body?.Name || '').trim();
     const normalizedHandle = normalizeHandle(req.body?.handle);
+    const normalizedReferralRaw = normalizeHandle(req.body?.parrainHandle || req.body?.codeParrain || '');
+    const normalizedReferral = normalizedReferralRaw || DEFAULT_REFERRAL_HANDLE;
     const idLogin = String(req.body?.id_login || req.body?.id || '').trim();
     const mail = String(req.body?.mail || req.body?.email || '').trim();
     const reputationValue = Number(req.body?.['réputation'] ?? 100);
@@ -492,24 +652,68 @@ app.post('/api/users', async (req, res) => {
       return res.status(409).json({ ok: false, message: 'Handle déjà utilisé.' });
     }
 
+    if (normalizedReferral) {
+      if (normalizedReferral === normalizedHandle) {
+        return res.status(400).json({ ok: false, message: 'Le code parrain ne peut pas être votre propre handle.' });
+      }
+
+      let referralExists = false;
+
+      if (adminDb) {
+        const referralFirestore = await adminDb
+          .collection('users')
+          .where('handle', '==', normalizedReferral)
+          .limit(1)
+          .get();
+
+        referralExists = !referralFirestore.empty;
+      }
+
+      if (!referralExists) {
+        referralExists = users.some(
+          user => String(user.handle || '').toLowerCase() === normalizedReferral.toLowerCase()
+        );
+      }
+
+      if (!referralExists) {
+        return res.status(400).json({ ok: false, message: 'Code parrain invalide: handle introuvable.' });
+      }
+    }
+
     const newUser = {
       id: idLogin,
       handle: normalizedHandle,
+      parrainHandle: normalizedReferral,
       email: mail,
       Name: name,
       id_login: idLogin,
       mail,
-      'réputation': Number.isFinite(reputationValue) ? reputationValue : 100
+      'réputation': Number.isFinite(reputationValue) ? reputationValue : 100,
+      affiliations: []
     };
 
     if (adminDb) {
       await adminDb.collection('users').doc(idLogin).set({
         Name: newUser.Name,
         handle: newUser.handle,
+        parrainHandle: newUser.parrainHandle,
         id_login: newUser.id_login,
         mail: newUser.mail,
         réputation: newUser['réputation']
       });
+
+      if (newUser.parrainHandle) {
+        await adminDb
+          .collection('users')
+          .doc(idLogin)
+          .collection('affiliations')
+          .doc('active')
+          .set({
+            parrainHandle: newUser.parrainHandle,
+            'dateDébut': admin.firestore.FieldValue.serverTimestamp(),
+            'dateFin': null
+          }, { merge: true });
+      }
     }
 
     const existsById = users.some(user => String(user.id || user.id_login || '') === idLogin);
@@ -518,9 +722,90 @@ app.post('/api/users', async (req, res) => {
       await writeUsersFile(users);
     }
 
+    if (normalizedReferral) {
+      await upsertUserAffiliation({ idLogin, parrainHandle: normalizedReferral });
+    }
+
     return res.status(201).json({ ok: true, user: newUser });
   } catch (error) {
     return res.status(500).json({ ok: false, message: 'Erreur création utilisateur backend.', error: error.message });
+  }
+});
+
+app.patch('/api/users/:idLogin/profile', async (req, res) => {
+  try {
+    const idLogin = String(req.params.idLogin || '').trim();
+    const parrainHandleRaw = String(req.body?.parrainHandle || '').trim();
+    const normalizedReferral = normalizeHandle(parrainHandleRaw);
+
+    if (!idLogin) {
+      return res.status(400).json({ ok: false, message: 'id_login manquant.' });
+    }
+
+    let currentUser = null;
+    if (adminDb) {
+      const userDoc = await adminDb.collection('users').doc(idLogin).get();
+      if (userDoc.exists) {
+        currentUser = { id: userDoc.id, ...userDoc.data() };
+      }
+    }
+
+    if (!currentUser) {
+      const users = await readUsersFile();
+      currentUser = users.find(u => String(u.id_login || u.id || '').trim() === idLogin) || null;
+    }
+
+    if (!currentUser) {
+      return res.status(404).json({ ok: false, message: 'Utilisateur introuvable.' });
+    }
+
+    if (!normalizedReferral) {
+      return res.status(400).json({ ok: false, message: 'Code parrain manquant.' });
+    }
+
+    const currentHandle = normalizeHandle(currentUser.handle || '');
+    if (normalizedReferral === currentHandle) {
+      return res.status(400).json({ ok: false, message: 'Le code parrain ne peut pas être votre propre handle.' });
+    }
+
+    let referralExists = false;
+
+    if (adminDb) {
+      const refSnapshot = await adminDb
+        .collection('users')
+        .where('handle', '==', normalizedReferral)
+        .limit(1)
+        .get();
+      referralExists = !refSnapshot.empty;
+    }
+
+    if (!referralExists) {
+      const users = await readUsersFile();
+      referralExists = users.some(u => normalizeHandle(u.handle || '') === normalizedReferral);
+    }
+
+    if (!referralExists) {
+      return res.status(400).json({ ok: false, message: 'Code parrain invalide: handle introuvable.' });
+    }
+
+    if (adminDb) {
+      await adminDb.collection('users').doc(idLogin).set({
+        parrainHandle: normalizedReferral
+      }, { merge: true });
+    }
+
+    const users = await readUsersFile();
+    const idx = users.findIndex(u => String(u.id_login || u.id || '').trim() === idLogin);
+    if (idx >= 0) {
+      users[idx].parrainHandle = normalizedReferral;
+      await writeUsersFile(users);
+    }
+
+    await upsertUserAffiliation({ idLogin, parrainHandle: normalizedReferral });
+
+    return res.json({ ok: true, idLogin, parrainHandle: normalizedReferral });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: 'Erreur mise à jour profil utilisateur.', error: error.message });
   }
 });
 
@@ -1141,6 +1426,195 @@ app.post('/api/transactions/:id/generate-contract-pdf', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ ok: false, message: 'Erreur génération contrat PDF.', error: error.message });
+  }
+});
+
+app.post('/api/transactions/:id/sign-contract', async (req, res) => {
+  try {
+    const transactionId = String(req.params.id || '').trim();
+    const role = String(req.body?.role || '').trim().toLowerCase();
+    const signatureDataUrl = String(req.body?.signatureDataUrl || '').trim();
+    const senderIdLogin = String(req.body?.senderIdLogin || '').trim();
+
+    if (!transactionId || !role || !signatureDataUrl || !senderIdLogin) {
+      return res.status(400).json({ ok: false, message: 'Champs requis manquants (transactionId, role, signatureDataUrl, senderIdLogin).' });
+    }
+
+    if (!['buyer', 'seller'].includes(role)) {
+      return res.status(400).json({ ok: false, message: 'Rôle de signature invalide.' });
+    }
+
+    if (!adminStorageBucket) {
+      return res.status(503).json({ ok: false, message: 'Firebase Storage Admin indisponible côté serveur.' });
+    }
+
+    let transaction = null;
+    if (adminDb) {
+      const doc = await adminDb.collection('transactions').doc(transactionId).get();
+      if (doc.exists) transaction = { id: doc.id, ...doc.data() };
+    }
+    if (!transaction) {
+      const localTransactions = await readTransactionsFile();
+      transaction = localTransactions.find(tx => String(tx.id || '').trim() === transactionId) || null;
+    }
+    if (!transaction) {
+      return res.status(404).json({ ok: false, message: 'Transaction introuvable.' });
+    }
+
+    const buyerIdLogin = String(transaction.acheteur || '').trim();
+    const sellerIdLogin = String(transaction.vendeur || '').trim();
+
+    if ((role === 'buyer' && senderIdLogin !== buyerIdLogin) || (role === 'seller' && senderIdLogin !== sellerIdLogin)) {
+      return res.status(403).json({ ok: false, message: 'Utilisateur non autorisé à signer pour ce rôle.' });
+    }
+
+    const signatureBuffer = dataUrlToBuffer(signatureDataUrl);
+    const signatureField = role === 'buyer' ? 'signatureAcheteurImage' : 'signatureVendeurImage';
+    const signatureDateField = role === 'buyer' ? 'signatureAcheteurAt' : 'signatureVendeurAt';
+    const now = Date.now();
+
+    if (adminDb) {
+      const docRef = adminDb.collection('transactions').doc(transactionId);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.update({
+          [signatureField]: signatureDataUrl,
+          [signatureDateField]: now
+        });
+      }
+    }
+
+    const localTransactions = await readTransactionsFile();
+    const idx = localTransactions.findIndex(tx => String(tx.id || '').trim() === transactionId);
+    if (idx >= 0) {
+      localTransactions[idx][signatureField] = signatureDataUrl;
+      localTransactions[idx][signatureDateField] = now;
+      await writeTransactionsFile(localTransactions);
+      transaction = localTransactions[idx];
+    } else {
+      transaction = {
+        ...transaction,
+        [signatureField]: signatureDataUrl,
+        [signatureDateField]: now
+      };
+    }
+
+    const signatureAcheteurAt = toMillis(transaction.signatureAcheteurAt);
+    const signatureVendeurAt = toMillis(transaction.signatureVendeurAt);
+
+    let proofHash = String(transaction.preuveHashBlockchain || '').trim();
+    let signedPdfReference = String(transaction.contratSignePdfReference || '').trim();
+    let statut = String(transaction.statut || '').trim() || 'Signer contrat';
+
+    if (signatureAcheteurAt && signatureVendeurAt) {
+      const usersMap = await resolveUsersByIdLogin([buyerIdLogin, sellerIdLogin, senderIdLogin]);
+      const buyerUser = usersMap.get(buyerIdLogin) || null;
+      const sellerUser = usersMap.get(sellerIdLogin) || null;
+
+      const { conversationId, senderHandle } = await ensureConversationForTransactionData({
+        transactionId,
+        buyerIdLogin,
+        sellerIdLogin,
+        senderIdLogin
+      });
+
+      const buyerSignatureBuffer = dataUrlToBuffer(transaction.signatureAcheteurImage || '');
+      const sellerSignatureBuffer = dataUrlToBuffer(transaction.signatureVendeurImage || '');
+
+      const preHashSeed = `${transactionId}|${signatureAcheteurAt}|${signatureVendeurAt}|${now}`;
+      proofHash = crypto.createHash('sha256').update(preHashSeed).digest('hex');
+
+      const signedPdfBuffer = await buildSignedContractPdfBuffer({
+        transaction,
+        buyer: buyerUser,
+        seller: sellerUser,
+        buyerSignatureBuffer,
+        sellerSignatureBuffer,
+        proofHash
+      });
+
+      proofHash = crypto.createHash('sha256').update(signedPdfBuffer).digest('hex');
+
+      const attachmentName = 'contratsigne.pdf';
+      const objectPath = `conversations/${conversationId}/files/${Date.now()}_${attachmentName}`;
+      const token = crypto.randomUUID();
+      const file = adminStorageBucket.file(objectPath);
+      await file.save(signedPdfBuffer, {
+        contentType: 'application/pdf',
+        resumable: false,
+        metadata: {
+          metadata: {
+            firebaseStorageDownloadTokens: token,
+            conversationId,
+            transactionId,
+            uploaderId: senderIdLogin,
+            generatedType: 'signed-contract-pdf',
+            proofHash
+          }
+        }
+      });
+
+      const encodedPath = encodeURIComponent(objectPath);
+      signedPdfReference = `https://firebasestorage.googleapis.com/v0/b/${adminStorageBucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+      statut = 'Déposer les fonds';
+
+      const message = {
+        senderId: senderHandle,
+        text: `📄 Contrat signé généré. Hash blockchain: ${proofHash}`,
+        createdAt: now,
+        type: 'attachment',
+        seenBy: [senderHandle],
+        reference: signedPdfReference,
+        attachmentName,
+        attachmentType: 'application/pdf',
+        attachmentSize: signedPdfBuffer.length
+      };
+
+      await appendConversationMessage({
+        conversationId,
+        message,
+        lastMessage: `📎 ${attachmentName}`,
+        lastMessageSenderId: senderHandle
+      });
+
+      if (adminDb) {
+        const docRef = adminDb.collection('transactions').doc(transactionId);
+        const doc = await docRef.get();
+        if (doc.exists) {
+          await docRef.update({
+            preuveHashBlockchain: proofHash,
+            contratSignePdfReference: signedPdfReference,
+            contratSignePdfName: attachmentName,
+            contratSignePdfGeneratedAt: now,
+            statut
+          });
+        }
+      }
+
+      const localTxs = await readTransactionsFile();
+      const localIdx = localTxs.findIndex(tx => String(tx.id || '').trim() === transactionId);
+      if (localIdx >= 0) {
+        localTxs[localIdx].preuveHashBlockchain = proofHash;
+        localTxs[localIdx].contratSignePdfReference = signedPdfReference;
+        localTxs[localIdx].contratSignePdfName = attachmentName;
+        localTxs[localIdx].contratSignePdfGeneratedAt = now;
+        localTxs[localIdx].statut = statut;
+        await writeTransactionsFile(localTxs);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      transactionId,
+      role,
+      signatureAcheteurAt: signatureAcheteurAt || null,
+      signatureVendeurAt: signatureVendeurAt || null,
+      preuveHashBlockchain: proofHash || null,
+      contratSignePdfReference: signedPdfReference || null,
+      statut
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: 'Erreur signature contrat.', error: error.message });
   }
 });
 

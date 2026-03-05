@@ -26,5 +26,22 @@
     "Name": "wilfrid",
     "mail": "wilfrid@familledubreuil.fr",
     "email": "wilfrid@familledubreuil.fr"
+  },
+  {
+    "id": "MTjyEcWIx8ZTqrnwfyzMh4kaEIH3",
+    "handle": "actarus",
+    "parrainHandle": "wilfdaub",
+    "email": "test3@familledubreuil.fr",
+    "Name": "Actarus",
+    "id_login": "MTjyEcWIx8ZTqrnwfyzMh4kaEIH3",
+    "mail": "test3@familledubreuil.fr",
+    "réputation": 100,
+    "affiliations": [
+      {
+        "parrainHandle": "wilfdaub",
+        "dateDébut": 1772724355861,
+        "dateFin": null
+      }
+    ]
   }
 ]

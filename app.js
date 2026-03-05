@@ -47,6 +47,7 @@ const userNameCacheByIdLogin = {};
 const userHandleCacheByIdLogin = {};
 let ethersImportPromise = null;
 const ALLOWED_TRANSACTION_CRYPTO = 'SOL';
+const DEFAULT_REFERRAL_HANDLE = 'actarus';
 
 function showSelectablePopup(message) {
     const text = String(message || '');
@@ -487,6 +488,27 @@ async function updateTransactionContractValidationInDatabase(dbTransactionId, va
     }
 }
 
+async function signTransactionInDatabase(dbTransactionId, role, signatureDataUrl) {
+    if (!dbTransactionId) return null;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/sign-contract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            role,
+            signatureDataUrl,
+            senderIdLogin: AppData.currentUser?.id || ''
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de signer le contrat.');
+    }
+
+    return payload;
+}
+
 async function generateContractPdfInDatabase(dbTransactionId) {
     if (!dbTransactionId) return null;
 
@@ -537,6 +559,248 @@ function normalizeHandleValue(value) {
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return '';
     return raw.startsWith('@') ? raw.slice(1) : raw;
+}
+
+function formatDateTime(value) {
+    const millis = toMillis(value);
+    if (!millis) return '-';
+    return new Date(millis).toLocaleString('fr-FR');
+}
+
+async function loadCurrentUserProfileFromDatabase() {
+    const idLogin = String(AppData.currentUser?.id || '').trim();
+    if (!idLogin) return null;
+
+    const response = await fetch(`${API_BASE_URL}/api/users/id-login/${encodeURIComponent(idLogin)}`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok || !payload.user) {
+        throw new Error(payload.message || 'Impossible de charger votre profil.');
+    }
+
+    return payload.user;
+}
+
+async function updateCurrentUserReferralInDatabase(parrainHandle) {
+    const idLogin = String(AppData.currentUser?.id || '').trim();
+    if (!idLogin) throw new Error('Utilisateur non connecté.');
+
+    const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(idLogin)}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parrainHandle })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour le code parrain.');
+    }
+
+    return payload;
+}
+
+async function verifyHandleExists(handle) {
+    const normalized = normalizeHandleValue(handle);
+    if (!normalized) return { ok: false, message: 'Handle vide.' };
+
+    const response = await fetch(`${API_BASE_URL}/api/users/handle/${encodeURIComponent(normalized)}`);
+    const payload = await response.json().catch(() => ({}));
+
+    if (response.ok && payload.ok && payload.user) {
+        return { ok: true, handle: normalized, user: payload.user };
+    }
+
+    if (response.status === 404) {
+        return { ok: false, message: `Aucun utilisateur trouvé avec @${normalized}.` };
+    }
+
+    return { ok: false, message: payload.message || 'Vérification du handle impossible.' };
+}
+
+async function openProfileEditor() {
+    if (!AppData.currentUser?.id) {
+        alert('❌ Utilisateur non connecté.');
+        return;
+    }
+
+    let profile;
+    try {
+        profile = await loadCurrentUserProfileFromDatabase();
+    } catch (error) {
+        alert(`❌ ${error.message}`);
+        return;
+    }
+
+    const currentName = String(profile.Name || AppData.currentUser.name || '').trim();
+    const currentHandle = normalizeHandleValue(profile.handle || '');
+    const currentEmail = String(profile.mail || profile.email || AppData.currentUser.email || '').trim();
+    const currentIdLogin = String(profile.id_login || profile.id || AppData.currentUser.id || '').trim();
+    const currentReputation = String(profile['réputation'] ?? profile.reputation ?? '-').trim() || '-';
+    const currentReferral = normalizeHandleValue(profile.parrainHandle || '') || DEFAULT_REFERRAL_HANDLE;
+    const affiliations = Array.isArray(profile.affiliations) ? profile.affiliations : [];
+
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(2,6,23,0.7)';
+    overlay.style.zIndex = '99999';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.padding = '1rem';
+
+    const box = document.createElement('div');
+    box.style.width = 'min(860px, 98vw)';
+    box.style.maxHeight = '92vh';
+    box.style.overflow = 'auto';
+    box.style.background = '#0F172A';
+    box.style.border = '1px solid rgba(148,163,184,0.35)';
+    box.style.borderRadius = '12px';
+    box.style.padding = '1rem';
+    box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
+
+    const affiliationsHtml = affiliations.length === 0
+        ? '<div style="color:#94A3B8; font-size:0.85rem;">Aucune affiliation enregistrée.</div>'
+        : affiliations.map(item => {
+            const parrain = normalizeHandleValue(item.parrainHandle || '-');
+            const dateDebut = formatDateTime(item['dateDébut']);
+            const dateFin = item['dateFin'] === null ? 'Active' : formatDateTime(item['dateFin']);
+            return `
+                <div style="border:1px solid rgba(71,85,105,0.35); border-radius:8px; padding:0.55rem 0.65rem; margin-bottom:0.45rem; background:rgba(15,23,42,0.5);">
+                    <div style="color:#E2E8F0; font-size:0.86rem;"><strong>Parrain:</strong> ${parrain ? '@' + escapeHtml(parrain) : '-'}</div>
+                    <div style="color:#94A3B8; font-size:0.8rem; margin-top:0.2rem;"><strong>Début:</strong> ${escapeHtml(dateDebut)} | <strong>Fin:</strong> ${escapeHtml(dateFin)}</div>
+                </div>
+            `;
+        }).join('');
+
+    box.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; margin-bottom:0.9rem;">
+            <div style="font-size:1.05rem; font-weight:700; color:#E2E8F0;">Mon profil</div>
+            <button type="button" class="button secondary" id="profile-close-btn" style="max-width:120px; padding:0.4rem 0.55rem;">Fermer</button>
+        </div>
+
+        <div class="content-grid" style="grid-template-columns:1fr 1fr; gap:0.85rem; margin-bottom:0.9rem;">
+            <div class="card" style="padding:0.8rem;">
+                <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Informations utilisateur</div>
+                <div style="display:grid; gap:0.35rem; font-size:0.88rem; color:#E2E8F0;">
+                    <div><strong>Nom:</strong> ${escapeHtml(currentName || '-')}</div>
+                    <div><strong>Handle:</strong> ${currentHandle ? '@' + escapeHtml(currentHandle) : '-'}</div>
+                    <div><strong>Email:</strong> ${escapeHtml(currentEmail || '-')}</div>
+                    <div><strong>ID login:</strong> ${escapeHtml(currentIdLogin || '-')}</div>
+                    <div><strong>Réputation:</strong> ${escapeHtml(currentReputation)}</div>
+                </div>
+            </div>
+
+            <div class="card" style="padding:0.8rem;">
+                <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Modifier le code parrain</div>
+                <div class="form-group" style="margin-bottom:0.55rem;">
+                    <label style="font-size:0.8rem;">Code parrain actuel</label>
+                    <input id="profile-current-referral" type="text" readonly value="${currentReferral ? '@' + escapeHtml(currentReferral) : '-'}">
+                </div>
+                <div class="form-group" style="margin-bottom:0.55rem;">
+                    <label style="font-size:0.8rem;">Nouveau code parrain (handle)</label>
+                    <div style="display:flex; gap:0.45rem; align-items:center;">
+                        <input id="profile-new-referral" type="text" placeholder="Ex : pierre110" value="${escapeHtml(currentReferral)}">
+                        <button type="button" class="button secondary" id="profile-verify-referral" style="max-width:110px; padding:0.45rem 0.55rem;">Vérifier</button>
+                    </div>
+                </div>
+                <div id="profile-referral-status" class="seller-status" style="display:none;"></div>
+                <button type="button" class="button success" id="profile-save-referral" style="margin-top:0.6rem;">Enregistrer code parrain</button>
+            </div>
+        </div>
+
+        <div class="card" style="padding:0.8rem;">
+            <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Historique affiliations</div>
+            ${affiliationsHtml}
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:0.8rem;">
+            <button type="button" class="button danger" id="profile-logout-btn" style="max-width:160px;">Se déconnecter</button>
+        </div>
+    `;
+
+    const close = () => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+
+    const statusEl = box.querySelector('#profile-referral-status');
+    const newReferralInput = box.querySelector('#profile-new-referral');
+
+    const applyProfileReferralStyle = () => {
+        if (!newReferralInput) return;
+        const normalized = normalizeHandleValue(newReferralInput.value || '');
+        newReferralInput.style.color = normalized === DEFAULT_REFERRAL_HANDLE ? '#94A3B8' : '#E2E8F0';
+    };
+
+    const setStatus = (kind, message) => {
+        if (!statusEl) return;
+        statusEl.style.display = 'flex';
+        statusEl.className = `seller-status ${kind}`;
+        statusEl.textContent = message;
+    };
+
+    const verifyNewReferral = async () => {
+        const normalized = normalizeHandleValue(newReferralInput?.value || '');
+        if (newReferralInput) {
+            newReferralInput.value = normalized || DEFAULT_REFERRAL_HANDLE;
+            applyProfileReferralStyle();
+        }
+
+        const normalizedWithDefault = normalized || DEFAULT_REFERRAL_HANDLE;
+
+        if (normalizedWithDefault === currentHandle) {
+            setStatus('error', '❌ Le code parrain ne peut pas être votre propre handle.');
+            return null;
+        }
+
+        setStatus('loading', '⏳ Vérification du handle...');
+        const check = await verifyHandleExists(normalizedWithDefault);
+        if (!check.ok) {
+            setStatus('error', `❌ ${check.message}`);
+            return null;
+        }
+
+        const displayName = check.user?.Name || check.user?.mail || check.user?.email || normalizedWithDefault;
+        setStatus('success', `✅ Parrain trouvé: ${displayName} (@${normalizedWithDefault})`);
+        return normalizedWithDefault;
+    };
+
+    box.querySelector('#profile-close-btn')?.addEventListener('click', close);
+    box.querySelector('#profile-verify-referral')?.addEventListener('click', verifyNewReferral);
+    newReferralInput?.addEventListener('input', () => {
+        applyProfileReferralStyle();
+        if (!statusEl) return;
+        statusEl.style.display = 'none';
+        statusEl.className = 'seller-status';
+        statusEl.textContent = '';
+    });
+
+    box.querySelector('#profile-save-referral')?.addEventListener('click', async () => {
+        const verified = await verifyNewReferral();
+        if (!verified) return;
+
+        try {
+            await updateCurrentUserReferralInDatabase(verified);
+            AppData.currentUser.parrainHandle = verified;
+            saveData();
+            setStatus('success', `✅ Code parrain mis à jour: @${verified}`);
+        } catch (error) {
+            setStatus('error', `❌ ${error.message}`);
+        }
+    });
+
+    box.querySelector('#profile-logout-btn')?.addEventListener('click', () => {
+        close();
+        logout();
+    });
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) close();
+    });
+
+    applyProfileReferralStyle();
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
 }
 
 async function getEthersLibrary() {
@@ -919,6 +1183,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /** Detect which page we're on and run the matching initialisation. */
 async function initCurrentPage() {
+    try {
+        const profile = await loadCurrentUserProfileFromDatabase();
+        if (profile && AppData.currentUser) {
+            AppData.currentUser.name = String(profile.Name || AppData.currentUser.name || '').trim() || AppData.currentUser.name;
+            AppData.currentUser.email = String(profile.mail || profile.email || AppData.currentUser.email || '').trim() || AppData.currentUser.email;
+            AppData.currentUser.handle = normalizeHandleValue(profile.handle || AppData.currentUser.handle || '');
+            AppData.currentUser.parrainHandle = normalizeHandleValue(profile.parrainHandle || AppData.currentUser.parrainHandle || '');
+            updateUserUI();
+        }
+    } catch (error) {
+        console.warn('Profil utilisateur non chargé:', error.message);
+    }
+
     await loadTransactionsFromDatabase();
 
     if (document.getElementById('dashboard'))    updateDashboard();
@@ -998,6 +1275,9 @@ async function loadTransactionsFromDatabase() {
                 initiatorIdLogin: initiatorId,
                 buyerIdLogin: buyerId,
                 sellerIdLogin: sellerId,
+                contractSignedBuyer: !!transaction.signatureAcheteurAt,
+                contractSignedSeller: !!transaction.signatureVendeurAt,
+                signedContractHash: String(transaction.preuveHashBlockchain || '').trim(),
                 engagementText: String(transaction.engagementVendeur || '').trim(),
                 engagementBuyerText: String(transaction.engagementAcheteur || '').trim(),
                 sellerEngagementSaved: !!String(transaction.engagementVendeur || '').trim(),
@@ -1103,6 +1383,9 @@ async function openSharedTransactionFromUrl() {
                         initiatorIdLogin: initiatorId,
                         buyerIdLogin: buyerId,
                         sellerIdLogin: sellerId,
+                        contractSignedBuyer: !!transaction.signatureAcheteurAt,
+                        contractSignedSeller: !!transaction.signatureVendeurAt,
+                        signedContractHash: String(transaction.preuveHashBlockchain || '').trim(),
                         engagementText: String(transaction.engagementVendeur || '').trim(),
                         engagementBuyerText: String(transaction.engagementAcheteur || '').trim(),
                         sellerEngagementSaved: !!String(transaction.engagementVendeur || '').trim(),
@@ -1263,9 +1546,7 @@ function updateUserUI() {
             document.getElementById('userAvatar').textContent =
                 AppData.currentUser.avatar || _getInitials(name);
             document.getElementById('userName').textContent = name;
-            userProfile.onclick = () => {
-                if (confirm('Voulez‑vous vous déconnecter ?')) logout();
-            };
+            userProfile.onclick = () => { openProfileEditor(); };
         }
         if (navLogin)  navLogin.style.display  = 'none';
         if (navLogout) navLogout.style.display = 'block';
@@ -1744,6 +2025,28 @@ async function showEscrowDetail(escrowId) {
         `;
     }
 
+    if (escrow.status === 'Signer contrat') {
+        const buyerSigned = !!escrow.contractSignedBuyer;
+        const sellerSigned = !!escrow.contractSignedSeller;
+        const canSignBuyer = isBuyerUser && !buyerSigned;
+        const canSignSeller = isSellerUser && !sellerSigned;
+        const hashProof = String(escrow.signedContractHash || '').trim();
+
+        actionsHtml += `
+            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">✍️ Signer le contrat</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+                <button class="button ${buyerSigned ? 'secondary' : 'success'}" type="button" onclick="openContractSignaturePad(${escrow.id}, 'buyer')" ${canSignBuyer ? '' : 'disabled'}>
+                    ${buyerSigned ? '✅ Signé Acheteur' : 'Signer Acheteur'}
+                </button>
+                <button class="button ${sellerSigned ? 'secondary' : 'success'}" type="button" onclick="openContractSignaturePad(${escrow.id}, 'seller')" ${canSignSeller ? '' : 'disabled'}>
+                    ${sellerSigned ? '✅ Signé Vendeur' : 'Signer Vendeur'}
+                </button>
+            </div>
+            ${hashProof ? `<div class="alert alert-success" style="margin-top:0.7rem; margin-bottom:0.7rem;">✅ Hash de preuve blockchain: ${escapeHtml(hashProof)}</div>` : `<div class="alert alert-info" style="margin-top:0.7rem; margin-bottom:0.7rem;">ℹ️ Les deux signatures génèrent automatiquement le PDF signé et le hash de preuve blockchain.</div>`}
+            <div class="divider"></div>
+        `;
+    }
+
     if (escrow.status === 'En attente' && !isInitiator) {
         actionsHtml = `
             <div class="alert alert-info">ℹ️ Vous n'êtes pas l'initiateur. Acceptez ou refusez cette transaction.</div>
@@ -2059,6 +2362,187 @@ async function validateContractByRole(escrowId, role) {
     await tryAdvanceSignerContratStatus(escrow);
     saveData();
     showEscrowDetail(escrowId);
+}
+
+async function openContractSignaturePad(escrowId, role) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    if (escrow.status !== 'Signer contrat') {
+        alert('❌ Signature disponible uniquement à l\'étape Signer contrat.');
+        return;
+    }
+
+    const isBuyerUser = escrow.buyerIdLogin
+        ? String(escrow.buyerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.buyer || '') === String(AppData.currentUser.name || '');
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (role === 'buyer' && !isBuyerUser) {
+        alert('❌ Seul l\'acheteur peut signer côté acheteur.');
+        return;
+    }
+    if (role === 'seller' && !isSellerUser) {
+        alert('❌ Seul le vendeur peut signer côté vendeur.');
+        return;
+    }
+
+    const alreadySigned = role === 'buyer' ? !!escrow.contractSignedBuyer : !!escrow.contractSignedSeller;
+    if (alreadySigned) {
+        alert('✅ Cette signature est déjà enregistrée.');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(2,6,23,0.7)';
+    overlay.style.zIndex = '99999';
+    overlay.style.display = 'flex';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.padding = '1rem';
+
+    const box = document.createElement('div');
+    box.style.width = 'min(760px, 98vw)';
+    box.style.background = '#0F172A';
+    box.style.border = '1px solid rgba(148,163,184,0.35)';
+    box.style.borderRadius = '12px';
+    box.style.padding = '1rem';
+
+    const signerLabel = role === 'buyer' ? 'Acheteur' : 'Vendeur';
+
+    box.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; margin-bottom:0.8rem;">
+            <div style="font-size:1rem; font-weight:700; color:#E2E8F0;">Signature contrat — ${signerLabel}</div>
+            <button type="button" class="button secondary" id="sign-close" style="max-width:110px; padding:0.4rem 0.55rem;">Fermer</button>
+        </div>
+        <div class="alert alert-info" style="margin-bottom:0.6rem;">ℹ️ Dessinez votre signature puis cliquez sur Signer.</div>
+        <canvas id="sign-canvas" width="680" height="220" style="width:100%; border:1px solid rgba(148,163,184,0.35); border-radius:8px; background:#fff;"></canvas>
+        <div style="display:flex; gap:0.55rem; margin-top:0.7rem; justify-content:flex-end;">
+            <button type="button" class="button secondary" id="sign-clear" style="max-width:130px;">Effacer</button>
+            <button type="button" class="button success" id="sign-submit" style="max-width:180px;">Signer</button>
+        </div>
+        <div id="sign-status" class="seller-status" style="display:none; margin-top:0.6rem;"></div>
+    `;
+
+    const close = () => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+
+    const canvas = box.querySelector('#sign-canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let hasStroke = false;
+
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const getPos = (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const point = event.touches && event.touches[0] ? event.touches[0] : event;
+        return {
+            x: (point.clientX - rect.left) * (canvas.width / rect.width),
+            y: (point.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    };
+
+    const start = (event) => {
+        isDrawing = true;
+        const pos = getPos(event);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        hasStroke = true;
+        event.preventDefault();
+    };
+
+    const draw = (event) => {
+        if (!isDrawing) return;
+        const pos = getPos(event);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        event.preventDefault();
+    };
+
+    const stop = (event) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.closePath();
+        event.preventDefault();
+    };
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stop);
+    canvas.addEventListener('mouseleave', stop);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+    canvas.addEventListener('touchend', stop, { passive: false });
+
+    const statusEl = box.querySelector('#sign-status');
+    const setStatus = (kind, message) => {
+        statusEl.style.display = 'flex';
+        statusEl.className = `seller-status ${kind}`;
+        statusEl.textContent = message;
+    };
+
+    box.querySelector('#sign-close')?.addEventListener('click', close);
+    box.querySelector('#sign-clear')?.addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        hasStroke = false;
+        statusEl.style.display = 'none';
+    });
+
+    box.querySelector('#sign-submit')?.addEventListener('click', async () => {
+        if (!hasStroke) {
+            setStatus('error', '❌ Veuillez dessiner votre signature.');
+            return;
+        }
+
+        if (!escrow.dbTransactionId) {
+            setStatus('error', '❌ Transaction base introuvable.');
+            return;
+        }
+
+        try {
+            setStatus('loading', '⏳ Signature en cours...');
+            const signatureDataUrl = canvas.toDataURL('image/png');
+            const payload = await signTransactionInDatabase(escrow.dbTransactionId, role, signatureDataUrl);
+
+            escrow.contractSignedBuyer = !!payload.signatureAcheteurAt || !!escrow.contractSignedBuyer;
+            escrow.contractSignedSeller = !!payload.signatureVendeurAt || !!escrow.contractSignedSeller;
+            if (payload.preuveHashBlockchain) escrow.signedContractHash = payload.preuveHashBlockchain;
+
+            if (payload.statut) {
+                escrow.status = payload.statut;
+            }
+
+            escrow.timeline = Array.isArray(escrow.timeline) ? escrow.timeline : [];
+            escrow.timeline.push({
+                status: role === 'buyer' ? 'buyer-contract-signed' : 'seller-contract-signed',
+                time: Date.now(),
+                label: role === 'buyer' ? 'Signature acheteur enregistrée' : 'Signature vendeur enregistrée'
+            });
+
+            saveData();
+            close();
+            showEscrowDetail(escrowId);
+            alert('✅ Signature enregistrée.');
+        } catch (error) {
+            setStatus('error', `❌ ${error.message}`);
+        }
+    });
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) close();
+    });
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
 }
 
 async function saveEngagementText(escrowId) {
