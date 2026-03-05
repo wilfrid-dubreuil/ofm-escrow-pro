@@ -1,0 +1,16 @@
+{
+  "name": "ofm-escrow-pro-backend",
+  "version": "1.0.0",
+  "description": "Backend API for OFM Escrow Pro",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "firebase-admin": "^13.7.0"
+  }
+}

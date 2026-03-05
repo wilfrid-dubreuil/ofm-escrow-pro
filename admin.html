@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - OFM Transaction Pro</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+    <div class="nav-container">
+        <div class="logo">OFM Transaction Pro</div>
+        <ul class="nav-links">
+            <li><a href="index.html"        class="nav-link"        data-tab="dashboard">📊 Dashboard</a></li>
+            <li><a href="transactions.html" class="nav-link"        data-tab="escrows">📝 Mes Transactions</a></li>
+            <li><a href="create.html"       class="nav-link"        data-tab="create">🚀 Créer</a></li>
+            <li><a href="admin.html"        class="nav-link active" data-tab="admin">👨‍⚖️ Admin</a></li>
+            <li id="nav-login"  style="display:none;"><a href="login.html">🔐 Connexion</a></li>
+            <li id="nav-logout" style="display:none;"><a onclick="logout()">🚪 Déconnexion</a></li>
+        </ul>
+        <div class="user-profile" style="display:none;">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div id="userName"></div>
+        </div>
+    </div>
+</nav>
+
+<div id="selectOverlay" class="select-overlay"></div>
+
+<div class="container">
+
+    <!-- ============================================================
+         ADMIN
+         ============================================================ -->
+    <div id="admin" class="tab-content active">
+        <div class="header-section">
+            <h1>👨‍⚖️ Panel d'Arbitrage Admin</h1>
+            <p>Gérez les litiges, arbitrez les disputes, consultez les analytics</p>
+        </div>
+
+        <div class="content-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+            <!-- Open disputes -->
+            <div class="card">
+                <div class="card-title">⚖️ Litiges Ouverts</div>
+                <div id="admin-disputes" style="min-height:200px;">
+                    <p style="color:#94A3B8;">Aucun litige actuellement</p>
+                </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="card">
+                <div class="card-title">📊 KPIs Plateforme</div>
+                <div style="color:#94A3B8; line-height:2.2; font-size:0.95rem;">
+                    <div><strong style="color:#E2E8F0;">Total Transactions:</strong>      <span id="admin-total"          style="color:#60A5FA;">0</span></div>
+                    <div><strong style="color:#E2E8F0;">Bloqués:</strong>                 <span id="admin-locked"         style="color:#F59E0B;">0</span></div>
+                    <div><strong style="color:#E2E8F0;">Libérés:</strong>                 <span id="admin-released"       style="color:#10B981;">0</span></div>
+                    <div><strong style="color:#E2E8F0;">Remboursés:</strong>              <span id="admin-refunded"       style="color:#94A3B8;">0</span></div>
+                    <div><strong style="color:#E2E8F0;">Disputes:</strong>                <span id="admin-disputes-count" style="color:#EF4444;">0</span></div>
+                    <hr style="border:1px solid rgba(71,85,105,0.3); margin:1rem 0;">
+                    <div><strong style="color:#E2E8F0;">Taux de Succès:</strong>          <span id="admin-success"        style="color:#10B981;">0%</span></div>
+                    <div><strong style="color:#E2E8F0;">Commission Collectée:</strong>    <span id="admin-commission"     style="color:#3B82F6;">$0</span></div>
+                </div>
+            </div>
+
+            <!-- Analytics -->
+            <div class="card">
+                <div class="card-title">📈 Analytics Détaillées</div>
+                <div style="color:#94A3B8; font-size:0.9rem; line-height:2;">
+                    <div><strong style="color:#E2E8F0;">TVL (Total Locked):</strong>   <span id="admin-tvl">$0</span></div>
+                    <div><strong style="color:#E2E8F0;">Deals/Jour:</strong>            <span id="admin-daily">0</span></div>
+                    <div><strong style="color:#E2E8F0;">Durée Moyenne:</strong>         <span id="admin-avg-time">0h</span></div>
+                    <div><strong style="color:#E2E8F0;">Taux Litige:</strong>           <span id="admin-dispute-rate">0%</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:2rem;">
+            <div class="card-title">📋 Historique Complet des Deals</div>
+            <div id="admin-all-deals" style="margin-top:1rem;">
+                <p style="color:#94A3B8;">Aucun deal n'a été créé</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
+    <p style="font-size:0.85rem; margin-top:0.5rem;">
+        <a href="#">Conditions d'Utilisation</a> •
+        <a href="#">Politique de Confidentialité</a> •
+        <a href="#">Contact Support</a> •
+        <a href="#">Documentation</a>
+    </p>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OFM Transaction Pro - Plateforme d'échanges Multi-Crypto Sécurisée</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<nav>
+    <div class="nav-container">
+        <div class="logo">OFM Transaction Pro</div>
+        <ul class="nav-links">
+            <li><a href="index.html"        class="nav-link active" data-tab="dashboard">📊 Dashboard</a></li>
+            <li><a href="transactions.html" class="nav-link"        data-tab="escrows">📝 Mes Transactions</a></li>
+            <li><a href="create.html"       class="nav-link"        data-tab="create">🚀 Créer</a></li>
+            <li><a href="admin.html"        class="nav-link"        data-tab="admin">👨‍⚖️ Admin</a></li>
+            <!-- login / logout links controlled by JS -->
+            <li id="nav-login"  style="display:none;"><a href="login.html">🔐 Connexion</a></li>
+            <li id="nav-logout" style="display:none;"><a onclick="logout()">🚪 Déconnexion</a></li>
+        </ul>
+        <div class="user-profile" style="display:none;">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div id="userName"></div>
+        </div>
+    </div>
+</nav>
+
+<!-- Select Overlay -->
+<div id="selectOverlay" class="select-overlay"></div>
+
+<div class="container">
+
+    <!-- ============================================================
+         DASHBOARD
+         ============================================================ -->
+    <div id="dashboard" class="tab-content active">
+        <div class="header-section">
+            <h1>🎯 Plateforme d'échanges Multi-Crypto Sécurisée</h1>
+            <p>Transactions sécurisées avec conversion automatique en USDT — Smart Contracts Solana</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">📊 Total transactions</div>
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-change" id="stat-total-change">+0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">💰 Valeur Bloquée</div>
+                <div class="stat-value" id="stat-value">$0</div>
+                <div class="stat-change" id="stat-value-change">+0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">⚖️ Litiges Actifs</div>
+                <div class="stat-value" id="stat-disputes">0</div>
+                <div class="stat-change" id="stat-disputes-change">-0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">✅ Taux de Succès</div>
+                <div class="stat-value" id="stat-success">0%</div>
+                <div class="stat-change" id="stat-success-change">+0%</div>
+            </div>
+        </div>
+
+        <!-- Content grid -->
+        <div class="content-grid">
+            <!-- Recent escrows -->
+            <div class="card">
+                <div class="card-title">📝 Transactions Récentes</div>
+                <div id="recent-escrows">
+                    <p style="color: #94A3B8;">Aucune transaction pour le moment</p>
+                </div>
+            </div>
+              <!-- bouton creer -->
+            <div class="card">
+                <div class="card-title">🚀 Créer une Nouvelle Transaction</div>
+                <button class="button success" onclick="window.location.href='create.html'">Créer Transaction</button>
+            </div>
+
+            <!-- Key stats sidebar -->
+            <div class="card">
+                <div class="card-title">📊 Statistiques Clés</div>
+                <div style="color: #94A3B8; font-size: 0.9rem; line-height: 2;">
+                    <div><strong style="color:#E2E8F0;">Commission:</strong> 5%</div>
+                    <div><strong style="color:#E2E8F0;">Réseau:</strong> Polygon L2</div>
+                    <div><strong style="color:#E2E8F0;">Frais Gas:</strong> Très bas (&lt;1€)</div>
+                    <div><strong style="color:#E2E8F0;">Vitesse:</strong> 5–10 minutes</div>
+                    <div style="margin-top:1rem;"><strong style="color:#E2E8F0;">Support Crypto:</strong></div>
+                    <div>🪙 BTC • ETH • SOL • USDT • USDC • MATIC • TON</div>
+                </div>
+            </div>
+        </div><!-- /.content-grid -->
+
+        <!-- Feature badges -->
+        <div class="features-grid">
+            <div class="feature"><div class="feature-icon">💱</div><div class="feature-title">Multi-Crypto</div><div class="feature-text">7 cryptos supportées</div></div>
+            <div class="feature"><div class="feature-icon">🔄</div><div class="feature-title">Conversion Auto</div><div class="feature-text">Instantanée en USDT</div></div>
+            <div class="feature"><div class="feature-icon">🔐</div><div class="feature-title">Smart Contract</div><div class="feature-text">Sécurisé Polygon</div></div>
+            <div class="feature"><div class="feature-icon">⚖️</div><div class="feature-title">Arbitrage</div><div class="feature-text">Résolution juste</div></div>
+            <div class="feature"><div class="feature-icon">⏱️</div><div class="feature-title">Time-Lock</div><div class="feature-text">Auto-libération</div></div>
+            <div class="feature"><div class="feature-icon">📜</div><div class="feature-title">Signature Légale</div><div class="feature-text">Adobe Sign</div></div>
+        </div>
+    </div><!-- /#dashboard -->
+
+</div><!-- /.container -->
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer>
+    <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
+    <p style="font-size:0.85rem; margin-top:0.5rem;">
+        <a href="#">Conditions d'Utilisation</a> •
+        <a href="#">Politique de Confidentialité</a> •
+        <a href="#">Contact Support</a> •
+        <a href="#">Documentation</a>
+    </p>
+    <p style="font-size:0.8rem; margin-top:1rem; color:#64748B;">
+        Smart Contract: Polygon (L2) • Pont: Stargate Finance • Signatures: Adobe Sign
+    </p>
+</footer>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

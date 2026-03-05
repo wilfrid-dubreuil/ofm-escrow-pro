@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - OFM Transaction Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .login-logo {
+            font-size: 1.6rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.25rem;
+            text-align: center;
+        }
+
+        .login-tagline {
+            color: #64748B;
+            font-size: 0.85rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: linear-gradient(135deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95));
+            border: 1px solid rgba(71, 85, 105, 0.4);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+        }
+
+        /* ---- Profile Preview ---- */
+        .profile-preview {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .profile-preview-label {
+            font-size: 0.7rem;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.6rem;
+        }
+
+        .preview-avatar {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1rem;
+            color: #fff;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .preview-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #E2E8F0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: all 0.2s;
+        }
+
+        .preview-role {
+            font-size: 0.75rem;
+            color: #3B82F6;
+            margin-top: 0.1rem;
+        }
+
+        .preview-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.55rem;
+            background: rgba(59,130,246,0.15);
+            border: 1px solid rgba(59,130,246,0.3);
+            border-radius: 20px;
+            color: #60A5FA;
+            white-space: nowrap;
+        }
+
+        /* ---- Tabs ---- */
+        .login-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(71,85,105,0.3);
+        }
+
+        .login-tab {
+            flex: 1;
+            padding: 0.6rem;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #64748B;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+        }
+
+        .login-tab.active {
+            background: linear-gradient(135deg, #3B82F6, #6366F1);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        /* ---- Form ---- */
+        .login-card .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .login-card .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: #94A3B8;
+            margin-bottom: 0.35rem;
+            font-weight: 500;
+        }
+
+        .login-card .form-group input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(71, 85, 105, 0.4);
+            border-radius: 8px;
+            padding: 0.65rem 0.75rem;
+            color: #E2E8F0;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .login-card .form-group input:focus {
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+
+        .login-card .form-group input::placeholder {
+            color: #475569;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #3B82F6, #6366F1);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 0.5rem;
+        }
+
+        .btn-login:hover { opacity: 0.9; }
+        .btn-login:active { transform: scale(0.99); }
+
+        .login-footer-links {
+            display: flex;
+            justify-content: center;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+            color: #475569;
+        }
+
+        .login-footer-links a {
+            color: #60A5FA;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .login-footer-links a:hover { color: #93C5FD; }
+
+        .alert-msg {
+            padding: 0.6rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .alert-msg.error {
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #FCA5A5;
+            display: block;
+        }
+
+        .alert-msg.success {
+            background: rgba(16,185,129,0.12);
+            border: 1px solid rgba(16,185,129,0.3);
+            color: #6EE7B7;
+            display: block;
+        }
+
+        /* ---- Name field conditional ---- */
+        .field-name { transition: all 0.2s; }
+
+        /* ---- Divider ---- */
+        .login-divider {
+            text-align: center;
+            color: #334155;
+            font-size: 0.75rem;
+            margin: 1.25rem 0;
+            position: relative;
+        }
+        .login-divider::before, .login-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 42%;
+            height: 1px;
+            background: rgba(71,85,105,0.35);
+        }
+        .login-divider::before { left: 0; }
+        .login-divider::after { right: 0; }
+    </style>
+</head>
+<body>
+
+<div class="login-page">
+    <!-- Logo -->
+    <div class="login-logo">OFM Transaction Pro</div>
+    <p class="login-tagline">Plateforme d'échanges Multi-Crypto Sécurisée</p>
+
+    <div class="login-card">
+
+        <!-- Apercu profil utilisateur -->
+        <p class="profile-preview-label">Votre profil dans la barre de navigation</p>
+        <div class="profile-preview" id="profilePreview">
+            <div class="preview-avatar" id="previewAvatar">?</div>
+            <div class="preview-info">
+                <div class="preview-name" id="previewName">Votre nom</div>
+                <div class="preview-role">Acheteur / Vendeur</div>
+            </div>
+            <div class="preview-badge">Connecté</div>
+        </div>
+
+        <!-- Onglets Connexion / Inscription -->
+        <div class="login-tabs">
+            <button class="login-tab active" id="tab-login" onclick="switchMode('login')">Connexion</button>
+            <button class="login-tab" id="tab-register" onclick="switchMode('register')">Créer un compte</button>
+        </div>
+
+        <!-- Message d'alerte -->
+        <div class="alert-msg" id="alertMsg"></div>
+
+        <!-- Champ nom (inscription uniquement) -->
+        <div class="form-group field-name" id="fieldName" style="display:none;">
+            <label for="login-name">Nom complet</label>
+            <input type="text" id="login-name" placeholder="Ex : Jean Dupont" oninput="updatePreview()" autocomplete="name">
+        </div>
+
+        <div class="form-group field-name" id="fieldHandle" style="display:none;">
+            <label for="login-handle">Handle</label>
+            <input type="text" id="login-handle" placeholder="Ex : pierre110" autocomplete="username" oninput="normalizeHandleInput()">
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+            <label for="login-email">Adresse e-mail</label>
+            <input type="email" id="login-email" placeholder="exemple@domaine.com" oninput="updatePreviewFromEmail()" autocomplete="email">
+        </div>
+
+        <!-- Mot de passe -->
+        <div class="form-group">
+            <label for="login-password">Mot de passe</label>
+            <input type="password" id="login-password" placeholder="Au moins 6 caractères" autocomplete="current-password" onkeydown="if(event.key==='Enter') doAuth()">
+        </div>
+
+        <button class="btn-login" onclick="doAuth()" id="btnSubmit">Se connecter</button>
+
+        <div class="login-divider">ou</div>
+
+        <div class="login-footer-links">
+            <a href="#" onclick="forgotPassword(); return false;">Mot de passe oublié ?</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---- Firebase ----
+    const firebaseConfig = {
+        apiKey: "AIzaSyCukmS_r4HXy8zjSiXNn2uSLWMCu7eMsNM",
+        authDomain: "midgen-u6gv0i.firebaseapp.com",
+        projectId: "midgen-u6gv0i",
+        storageBucket: "midgen-u6gv0i.firebasestorage.app",
+        messagingSenderId: "364043792835",
+        appId: "1:364043792835:web:be5db5d2c038ed2e5a8d76"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const API_BASE_URL = window.location.origin && window.location.origin.startsWith('http')
+        ? window.location.origin
+        : 'http://localhost:3001';
+
+    let isCreatingAccount = false;
+
+    // Redirect if already logged in
+    firebase.auth().onAuthStateChanged(user => {
+        if (user && !isCreatingAccount) window.location.href = 'index.html';
+    });
+
+    // ---- Mode (login | register) ----
+    let currentMode = 'login';
+
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+        document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+        document.getElementById('fieldName').style.display = mode === 'register' ? 'block' : 'none';
+        document.getElementById('fieldHandle').style.display = mode === 'register' ? 'block' : 'none';
+        document.getElementById('btnSubmit').textContent = mode === 'login' ? 'Se connecter' : 'Créer mon compte';
+        document.getElementById('login-password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+        clearAlert();
+        updatePreview();
+    }
+
+    // ---- Preview du profil ----
+    function getInitials(name) {
+        if (!name || !name.trim()) return '?';
+        return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    }
+
+    function updatePreview() {
+        const nameInput = document.getElementById('login-name').value.trim();
+        const emailInput = document.getElementById('login-email').value.trim();
+        let display = nameInput || (emailInput ? emailInput.split('@')[0] : '');
+        const initials = getInitials(display);
+        document.getElementById('previewAvatar').textContent = initials || '?';
+        document.getElementById('previewName').textContent = display || 'Votre nom';
+    }
+
+    function updatePreviewFromEmail() {
+        if (currentMode === 'login') updatePreview();
+        else updatePreview();
+    }
+
+    function normalizeHandleInput() {
+        const handleEl = document.getElementById('login-handle');
+        if (!handleEl) return;
+        handleEl.value = handleEl.value.toLowerCase();
+    }
+
+    // ---- Auth ----
+    function showSelectablePopup(message) {
+        const text = String(message || '');
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(2,6,23,0.65)';
+        overlay.style.zIndex = '99999';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.padding = '1rem';
+
+        const box = document.createElement('div');
+        box.style.width = 'min(720px, 96vw)';
+        box.style.background = '#0F172A';
+        box.style.border = '1px solid rgba(148,163,184,0.35)';
+        box.style.borderRadius = '10px';
+        box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
+        box.style.padding = '1rem';
+
+        const isError = text.toLowerCase().includes('error') || text.toLowerCase().includes('permission') || text.toLowerCase().includes('unauthorized');
+        const title = document.createElement('div');
+        title.textContent = isError ? 'Erreur' : 'Information';
+        title.style.color = isError ? '#FCA5A5' : '#93C5FD';
+        title.style.fontWeight = '700';
+        title.style.marginBottom = '0.55rem';
+
+        const textArea = document.createElement('textarea');
+        textArea.readOnly = true;
+        textArea.value = text;
+        textArea.style.width = '100%';
+        textArea.style.minHeight = '120px';
+        textArea.style.maxHeight = '48vh';
+        textArea.style.resize = 'vertical';
+        textArea.style.background = 'rgba(15,23,42,0.8)';
+        textArea.style.color = '#E2E8F0';
+        textArea.style.border = '1px solid rgba(148,163,184,0.35)';
+        textArea.style.borderRadius = '8px';
+        textArea.style.padding = '0.65rem';
+        textArea.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        textArea.style.fontSize = '0.85rem';
+
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.justifyContent = 'flex-end';
+        actions.style.gap = '0.55rem';
+        actions.style.marginTop = '0.7rem';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'Copier';
+        copyBtn.style.background = '#1D4ED8';
+        copyBtn.style.color = '#fff';
+        copyBtn.style.border = 'none';
+        copyBtn.style.borderRadius = '6px';
+        copyBtn.style.padding = '0.45rem 0.8rem';
+        copyBtn.style.cursor = 'pointer';
+        copyBtn.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(text);
+                copyBtn.textContent = 'Copié';
+                setTimeout(() => { copyBtn.textContent = 'Copier'; }, 1200);
+            } catch (_error) {
+                textArea.focus();
+                textArea.select();
+            }
+        };
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.textContent = 'OK';
+        closeBtn.style.background = '#2563EB';
+        closeBtn.style.color = '#fff';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '6px';
+        closeBtn.style.padding = '0.45rem 0.8rem';
+        closeBtn.style.cursor = 'pointer';
+
+        const close = () => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        };
+
+        closeBtn.onclick = close;
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) close();
+        });
+
+        actions.appendChild(copyBtn);
+        actions.appendChild(closeBtn);
+        box.appendChild(title);
+        box.appendChild(textArea);
+        box.appendChild(actions);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        textArea.focus();
+        textArea.select();
+    }
+
+    window.alert = (message) => showSelectablePopup(message);
+
+    function showAlert(msg, type) {
+        const el = document.getElementById('alertMsg');
+        el.textContent = msg;
+        el.className = 'alert-msg ' + type;
+        if (type === 'error') {
+            showSelectablePopup(msg);
+        }
+    }
+
+    function clearAlert() {
+        const el = document.getElementById('alertMsg');
+        el.className = 'alert-msg';
+        el.textContent = '';
+    }
+
+    async function isHandleAlreadyUsed(handle) {
+        try {
+            const existingHandle = await db.collection('users')
+                .where('handle', '==', handle)
+                .limit(1)
+                .get();
+            return !existingHandle.empty;
+        } catch (error) {
+            const isPermissionError = error && (
+                error.code === 'permission-denied' ||
+                String(error.message || '').toLowerCase().includes('missing or insufficient permissions')
+            );
+
+            if (!isPermissionError) throw error;
+
+            const response = await fetch(`${API_BASE_URL}/api/users/handle/${encodeURIComponent(handle)}`);
+            if (response.status === 404) return false;
+            if (response.ok) return true;
+
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.message || 'Impossible de vérifier le handle.');
+        }
+    }
+
+    async function persistUserProfile(userPayload) {
+        try {
+            await db.collection('users').doc(userPayload.id_login).set(userPayload);
+            return;
+        } catch (error) {
+            const isPermissionError = error && (
+                error.code === 'permission-denied' ||
+                String(error.message || '').toLowerCase().includes('missing or insufficient permissions')
+            );
+
+            if (!isPermissionError) throw error;
+
+            const response = await fetch(`${API_BASE_URL}/api/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userPayload)
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || 'Impossible de créer le profil utilisateur.');
+            }
+        }
+    }
+
+    async function doAuth() {
+        clearAlert();
+        const name     = document.getElementById('login-name').value.trim();
+        const handle   = document.getElementById('login-handle').value.trim();
+        const email    = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+
+        if (!email || !password) {
+            showAlert('Veuillez renseigner votre email et votre mot de passe.', 'error');
+            return;
+        }
+        if (password.length < 6) {
+            showAlert('Le mot de passe doit contenir au moins 6 caractères.', 'error');
+            return;
+        }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+            showAlert('Adresse e-mail invalide.', 'error');
+            return;
+        }
+
+        if (currentMode === 'register') {
+            if (!handle) {
+                showAlert('Veuillez renseigner un handle.', 'error');
+                return;
+            }
+
+            const handlePattern = /^[a-zA-Z0-9_]{3,30}$/;
+            if (!handlePattern.test(handle)) {
+                showAlert('Le handle doit contenir 3 à 30 caractères (lettres, chiffres, underscore).', 'error');
+                return;
+            }
+        }
+
+        const applyName = user => {
+            if (user && name && !user.displayName) {
+                user.updateProfile({ displayName: name }).catch(() => {});
+            }
+        };
+
+        const normalizedHandle = (handle.startsWith('@') ? handle.slice(1) : handle).toLowerCase();
+
+        if (currentMode === 'register') {
+            try {
+                isCreatingAccount = true;
+
+                const handleAlreadyUsed = await isHandleAlreadyUsed(normalizedHandle);
+
+                if (handleAlreadyUsed) {
+                    showAlert('Ce handle est déjà utilisé. Choisissez-en un autre.', 'error');
+                    isCreatingAccount = false;
+                    return;
+                }
+
+                const res = await firebase.auth().createUserWithEmailAndPassword(email, password);
+                applyName(res.user);
+
+                await persistUserProfile({
+                    Name: name || (email ? email.split('@')[0] : ''),
+                    handle: normalizedHandle,
+                    id_login: res.user.uid,
+                    mail: email,
+                    réputation: 100
+                });
+
+                isCreatingAccount = false;
+                window.location.href = 'index.html';
+            } catch (err) {
+                isCreatingAccount = false;
+                if (err.code === 'auth/email-already-in-use') {
+                    showAlert('Cet email est déjà utilisé. Essayez de vous connecter.', 'error');
+                } else {
+                    showAlert(err.message, 'error');
+                }
+            }
+        } else {
+            firebase.auth().signInWithEmailAndPassword(email, password)
+                .then(res => { applyName(res.user); })
+                .catch(err => {
+                    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-login-credentials') {
+                        showAlert('Identifiants incorrects. Vérifiez votre email et mot de passe.', 'error');
+                    } else if (err.code === 'auth/wrong-password') {
+                        showAlert('Mot de passe incorrect.', 'error');
+                    } else {
+                        showAlert(err.message, 'error');
+                    }
+                });
+        }
+    }
+
+    function forgotPassword() {
+        const email = document.getElementById('login-email').value.trim();
+        if (!email) {
+            showAlert('Entrez votre email ci-dessus pour réinitialiser le mot de passe.', 'error');
+            return;
+        }
+        firebase.auth().sendPasswordResetEmail(email)
+            .then(() => showAlert('Email de réinitialisation envoyé.', 'success'))
+            .catch(e => showAlert('Erreur : ' + e.message, 'error'));
+    }
+
+    // Initialise la preview
+    updatePreview();
+</script>
+</body>
+</html>

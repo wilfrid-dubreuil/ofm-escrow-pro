@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créer une Transaction - OFM Transaction Pro</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+    <div class="nav-container">
+        <div class="logo">OFM Transaction Pro</div>
+        <ul class="nav-links">
+            <li><a href="index.html"        class="nav-link"        data-tab="dashboard">📊 Dashboard</a></li>
+            <li><a href="transactions.html" class="nav-link"        data-tab="escrows">📝 Mes Transactions</a></li>
+            <li><a href="create.html"       class="nav-link active" data-tab="create">🚀 Créer</a></li>
+            <li><a href="admin.html"        class="nav-link"        data-tab="admin">👨‍⚖️ Admin</a></li>
+            <li id="nav-login"  style="display:none;"><a href="login.html">🔐 Connexion</a></li>
+            <li id="nav-logout" style="display:none;"><a onclick="logout()">🚪 Déconnexion</a></li>
+        </ul>
+        <div class="user-profile" style="display:none;">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div id="userName"></div>
+        </div>
+    </div>
+</nav>
+
+<div id="selectOverlay" class="select-overlay"></div>
+
+<div class="container">
+
+    <!-- ============================================================
+         TAB: CRÉER TRANSACTION
+         ============================================================ -->
+    <div id="create" class="tab-content active">
+        <div class="header-section">
+            <h1>🚀 Créer une nouvelle transaction</h1>
+            <p>Lancez une transaction sécurisée en quelques clics</p>
+        </div>
+
+        <div class="card" style="max-width:700px; margin:0 auto;">
+            <div class="card-title">🚀 Créer une nouvelle transaction</div>
+            <div class="form-group">
+                <label>Je suis :</label>
+                <div class="button-group" style="grid-template-columns: 1fr 1fr; gap:0.5rem;">
+                    <button type="button" id="role-buyer-btn" class="button success" onclick="setCounterpartyRole(true)">Acheteur</button>
+                    <button type="button" id="role-seller-btn" class="button secondary" onclick="setCounterpartyRole(false)">Vendeur</button>
+                </div>
+                <input type="hidden" id="is-buyer-input" value="true">
+            </div>
+            <div class="form-group">
+                <label>📝 Titre de la transaction</label>
+                <input type="text" id="transaction-title" placeholder="Ex: Vente NFT Mars 2026" maxlength="120">
+            </div>
+            <div class="form-group">
+                <label id="counterparty-handle-label">👤 Renseigner le nom d'utilisateur du vendeur</label>
+                <div class="input-with-icon">
+                    <input type="string" id="seller-input" placeholder="Ex: @Pierre110"
+                           onchange="updateAmountInfo()" onkeypress="if(event.key==='Enter') searchSeller()">
+                    <button type="button" class="icon-button" onclick="searchSeller()" title="Vérifier le vendeur">
+                        🔍
+                    </button>
+                </div>
+                <div id="seller-status" class="seller-status" style="display:none;"></div>
+            </div>
+            <div class="form-group">
+                <label>💱 Crypto de Paiement</label>
+                <select id="crypto-select" onchange="updateAmountInfo()">
+                    <option value="">Chargement des tokens...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>💶 Montant (EUR)</label>
+                <input type="number" id="amount-input" placeholder="Ex: 1000"
+                       min="10" max="100000" value="1000" onchange="updateAmountInfo()">
+            </div>
+            <div class="form-group">
+                <label>⏱️ Période de Garantie (Heures)</label>
+                <input type="number" id="guarantee-select" placeholder="Durée en heures"
+                          list="guarantee-list" min="1" value="48" onchange="updateAmountInfo()">
+                <datalist id="guarantee-list">
+                    <option value="4">4 heures (Express)</option>
+                    <option value="24">24 heures</option>
+                    <option value="48">48 heures (Recommandé)</option>
+                    <option value="72">72 heures</option>
+                    <option value="168">168 heures (7 jours)</option>
+                </datalist>
+            </div>
+            <div id="amount-info" class="alert alert-info" style="display:none;">
+                ℹ️ <span id="amount-info-text"></span>
+            </div>
+            <button class="button success" onclick="createEscrow()">🔗 Créer Transaction</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         TAB: PAIEMENT
+         ============================================================ -->
+    <div id="payment" class="tab-content">
+        <div class="header-section">
+            <h1>💳 Effectuez le Paiement</h1>
+            <p>Envoyez votre crypto à l'adresse fournie</p>
+        </div>
+
+        <div class="content-grid" style="grid-template-columns: 1fr 1fr;">
+            <!-- Payment details -->
+            <div class="card">
+                <div class="card-title">📋 Détails du Paiement</div>
+                <div class="payment-details">
+                    <div class="detail-row"><span class="detail-label">ID Commande:</span>           <span class="detail-value" id="payment-id">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Montant à Envoyer:</span>     <span class="detail-value" id="payment-crypto-amount">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Commission (5%):</span>        <span class="detail-value" id="payment-commission">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Vendeur Reçoit:</span>         <span class="detail-value" id="payment-seller-gets">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Équivalent USDT:</span>        <span class="detail-value" id="payment-usdt">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Statut:</span>                 <span class="detail-value" id="payment-status">⏱️ EN ATTENTE</span></div>
+                    <div class="detail-row"><span class="detail-label">Temps Restant:</span>          <span class="detail-value countdown" id="countdown">30:00</span></div>
+                </div>
+
+                <div class="alert alert-warning">
+                    <span>⏰</span>
+                    <span>L'adresse de paiement expire dans 30 minutes. Envoyez rapidement.</span>
+                </div>
+
+                <div style="margin:1.5rem 0;">
+                    <h3 style="margin-bottom:1rem;">📊 Progression du Deal</h3>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(80px, 1fr)); gap:0.75rem;">
+                        <div style="text-align:center;">
+                            <div style="width:40px;height:40px;margin:0 auto 0.5rem;background:#10B981;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;">✓</div>
+                            <div style="font-size:0.8rem;color:#94A3B8;">1. Créé</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="width:40px;height:40px;margin:0 auto 0.5rem;background:#3B82F6;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;box-shadow:0 0 20px rgba(59,130,246,0.5);">2</div>
+                            <div style="font-size:0.8rem;color:#94A3B8;">2. Envoyer</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="width:40px;height:40px;margin:0 auto 0.5rem;background:rgba(71,85,105,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-weight:bold;">3</div>
+                            <div style="font-size:0.8rem;color:#94A3B8;">3. Bridge</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="width:40px;height:40px;margin:0 auto 0.5rem;background:rgba(71,85,105,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-weight:bold;">4</div>
+                            <div style="font-size:0.8rem;color:#94A3B8;">4. Lock</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="width:40px;height:40px;margin:0 auto 0.5rem;background:rgba(71,85,105,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94A3B8;font-weight:bold;">5</div>
+                            <div style="font-size:0.8rem;color:#94A3B8;">5. Libération</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Address & QR -->
+            <div class="card">
+                <div class="card-title">🔗 Adresse de Paiement</div>
+                <div class="qr-code">📱 QR</div>
+                <div class="address-box" id="payment-address">1A1z7agoat4b4Kc8z3c5z7x9y1z3a5b7c</div>
+                <button class="button secondary" onclick="copyPaymentAddress()" style="margin-bottom:0.75rem;">📋 Copier l'Adresse</button>
+                <button class="button secondary" onclick="alert('Fonction QR non disponible en démo. Utilisez l\'adresse ci-dessus.');">📱 Afficher QR Code</button>
+
+                <div class="alert alert-info" style="margin-top:1rem;">
+                    <span>ℹ️</span>
+                    <span>Scannez avec votre wallet mobile ou collez l'adresse</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:2rem;">
+            <div class="card-title">📝 Instructions Paiement</div>
+            <div style="color:#94A3B8; line-height:2; font-size:0.95rem;">
+                <div>1️⃣ <strong>Ouvrez</strong> votre wallet (MetaMask, Trust Wallet, Ledger…)</div>
+                <div>2️⃣ <strong>Sélectionnez</strong> la crypto: <strong id="payment-crypto-type" style="color:#60A5FA;">BTC</strong></div>
+                <div>3️⃣ <strong>Scannez</strong> le QR ou <strong>collez</strong> l'adresse exacte</div>
+                <div>4️⃣ <strong>Envoyez</strong> exactement <strong id="payment-exact-amount" style="color:#60A5FA;">0.023 BTC</strong></div>
+                <div>5️⃣ <strong>Confirmez</strong> la transaction (~10–30 min pour confirmations blockchain)</div>
+                <div>6️⃣ <strong>Attendez</strong> conversion automatique en USDT via Stargate (2–5 min)</div>
+                <div>7️⃣ <strong>Fonds verrouillés</strong> dans le smart contract Polygon ✅</div>
+            </div>
+            <div class="key-info" style="margin-top:1.5rem;">
+                <strong>🔒 Sécurité:</strong> Votre crypto est verrouillée dans un smart contract immuable.
+                Personne, pas même nous, ne peut la retirer sans votre approbation.
+            </div>
+            <div class="button-group" style="margin-top:1.5rem;">
+                <button class="button success" onclick="confirmPayment()">✅ Paiement Effectué</button>
+                <button class="button secondary" onclick="switchTab('create')">❌ Annuler</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
+    <p style="font-size:0.85rem; margin-top:0.5rem;">
+        <a href="#">Conditions d'Utilisation</a> •
+        <a href="#">Politique de Confidentialité</a> •
+        <a href="#">Contact Support</a> •
+        <a href="#">Documentation</a>
+    </p>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

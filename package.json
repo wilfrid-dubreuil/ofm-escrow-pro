@@ -1,0 +1,11 @@
+{
+  "name": "ofm-escrow-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:backend": "npm --prefix backend install",
+    "dev": "npm run install:backend && npm --prefix backend run dev",
+    "start": "npm --prefix backend run start",
+    "quickstart": "npm run dev"
+  }
+}

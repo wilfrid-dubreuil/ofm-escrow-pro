@@ -1,0 +1,30 @@
+[
+  {
+    "id": "u1",
+    "handle": "pierre110",
+    "email": "pierre@example.com",
+    "réputation": 98
+  },
+  {
+    "id": "u2",
+    "handle": "sophie96",
+    "email": "sophie@example.com",
+    "réputation": 96
+  },
+  {
+    "id": "wVwSazUXDrf05jmQIDh4K2Nczzh1",
+    "handle": "testwill",
+    "email": "test2@familledubreuil.fr",
+    "Name": "tes will",
+    "id_login": "wVwSazUXDrf05jmQIDh4K2Nczzh1",
+    "mail": "test2@familledubreuil.fr",
+    "réputation": 100
+  },
+  {
+    "id": "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+    "id_login": "9tVt2veKlKUmGaMQ8usoBbxBOH93",
+    "Name": "wilfrid",
+    "mail": "wilfrid@familledubreuil.fr",
+    "email": "wilfrid@familledubreuil.fr"
+  }
+]

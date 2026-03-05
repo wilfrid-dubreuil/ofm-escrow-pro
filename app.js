@@ -1,0 +1,2077 @@
+/* ============================================================
+   OFM Escrow Pro - Application Logic
+   ============================================================ */
+
+// ============ STATE MANAGEMENT ============
+const AppData = {
+    // will hold information about the signed–in user; null when nobody is logged in
+    currentUser: null,
+    escrows: [],
+    disputes: [],
+    payments: [],
+    nextEscrowId: 1
+};
+
+// Firebase initialization placeholder (needs config same as login.html)
+if (typeof firebase !== 'undefined') {
+    const firebaseConfig = {
+        apiKey: "AIzaSyCukmS_r4HXy8zjSiXNn2uSLWMCu7eMsNM",
+        authDomain: "midgen-u6gv0i.firebaseapp.com",
+        projectId: "midgen-u6gv0i",
+        storageBucket: "midgen-u6gv0i.firebasestorage.app",
+        messagingSenderId: "364043792835",
+        appId: "1:364043792835:web:be5db5d2c038ed2e5a8d76"
+    };
+    firebase.initializeApp(firebaseConfig);
+}
+
+
+let currentEscrowId = null;
+let countdownInterval = null;
+let isBuyerRole = true;
+const API_BASE_URL = window.location.origin && window.location.origin.startsWith('http')
+    ? window.location.origin
+    : 'http://localhost:3001';
+
+const cryptoPrices = {
+    BTC:  43500,
+    ETH:  2800,
+    SOL:  220,
+    USDT: 1,
+    USDC: 1,
+    MATIC: 0.8,
+    TON:  7
+};
+
+const userNameCacheByIdLogin = {};
+const userHandleCacheByIdLogin = {};
+let ethersImportPromise = null;
+const ALLOWED_TRANSACTION_CRYPTO = 'SOL';
+
+function showSelectablePopup(message) {
+    const text = String(message || '');
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(2,6,23,0.65)';
+    overlay.style.zIndex = '99999';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '1rem';
+
+    const box = document.createElement('div');
+    box.style.width = 'min(720px, 96vw)';
+    box.style.background = '#0F172A';
+    box.style.border = '1px solid rgba(148,163,184,0.35)';
+    box.style.borderRadius = '10px';
+    box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
+    box.style.padding = '1rem';
+
+    const isError = text.includes('❌') || text.toLowerCase().includes('error') || text.toLowerCase().includes('unauthorized') || text.toLowerCase().includes('permission');
+    const title = document.createElement('div');
+    title.textContent = isError ? 'Erreur' : 'Information';
+    title.style.color = isError ? '#FCA5A5' : '#93C5FD';
+    title.style.fontWeight = '700';
+    title.style.marginBottom = '0.55rem';
+
+    const textArea = document.createElement('textarea');
+    textArea.readOnly = true;
+    textArea.value = text;
+    textArea.style.width = '100%';
+    textArea.style.minHeight = '120px';
+    textArea.style.maxHeight = '48vh';
+    textArea.style.resize = 'vertical';
+    textArea.style.background = 'rgba(15,23,42,0.8)';
+    textArea.style.color = '#E2E8F0';
+    textArea.style.border = '1px solid rgba(148,163,184,0.35)';
+    textArea.style.borderRadius = '8px';
+    textArea.style.padding = '0.65rem';
+    textArea.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+    textArea.style.fontSize = '0.85rem';
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.gap = '0.55rem';
+    actions.style.marginTop = '0.7rem';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = 'Copier';
+    copyBtn.style.background = '#1D4ED8';
+    copyBtn.style.color = '#fff';
+    copyBtn.style.border = 'none';
+    copyBtn.style.borderRadius = '6px';
+    copyBtn.style.padding = '0.45rem 0.8rem';
+    copyBtn.style.cursor = 'pointer';
+    copyBtn.onclick = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = 'Copié';
+            setTimeout(() => { copyBtn.textContent = 'Copier'; }, 1200);
+        } catch (_error) {
+            textArea.focus();
+            textArea.select();
+        }
+    };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'OK';
+    closeBtn.style.background = '#2563EB';
+    closeBtn.style.color = '#fff';
+    closeBtn.style.border = 'none';
+    closeBtn.style.borderRadius = '6px';
+    closeBtn.style.padding = '0.45rem 0.8rem';
+    closeBtn.style.cursor = 'pointer';
+
+    const close = () => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+
+    closeBtn.onclick = close;
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) close();
+    });
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(closeBtn);
+    box.appendChild(title);
+    box.appendChild(textArea);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    textArea.focus();
+    textArea.select();
+}
+
+if (typeof window !== 'undefined') {
+    window.alert = (message) => showSelectablePopup(message);
+}
+
+// Solana token list storage
+let solanaTokenList = {};
+
+// ============ CROSS-PAGE TAB MAP ============
+function toMillis(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+    return null;
+}
+const PAGE_TABS = {
+    'dashboard':     'index.html',
+    'escrows':       'transactions.html',
+    'escrow-detail': 'transactions.html',
+    'create':        'create.html',
+    'payment':       'create.html',
+    'admin':         'admin.html'
+};
+
+// ============ LOAD SOLANA TOKEN LIST ============
+async function loadSolanaTokenList() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/tokens`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.message || 'API tokens indisponible');
+
+            const createdAt = toMillis(transaction.datecreation) ?? Date.now();
+
+        Object.entries(payload.prices || {}).forEach(([symbol, price]) => {
+            if (typeof price === 'number' && price > 0) {
+                cryptoPrices[symbol] = price;
+            }
+        });
+
+        populateCryptoSelect();
+    } catch (error) {
+        console.error('Error loading Solana token list:', error);
+        populateCryptoSelectFallback();
+    }
+}
+
+// ============ POPULATE CRYPTO SELECT ============
+function populateCryptoSelect() {
+    const selectElements = ['crypto-select', 'create-crypto'];
+
+    selectElements.forEach(selectId => {
+        const selectElement = document.getElementById(selectId);
+        if (!selectElement) return;
+
+        selectElement.innerHTML = '';
+
+        const option = document.createElement('option');
+        option.value = ALLOWED_TRANSACTION_CRYPTO;
+        const price = cryptoPrices[ALLOWED_TRANSACTION_CRYPTO] || 0;
+        option.textContent = `${ALLOWED_TRANSACTION_CRYPTO} — ${(typeof price === 'number' ? price : 0).toFixed(2)}€`;
+        selectElement.appendChild(option);
+        selectElement.value = ALLOWED_TRANSACTION_CRYPTO;
+    });
+}
+
+// ============ FALLBACK: POPULATE WITHOUT TOKEN LIST ============
+function populateCryptoSelectFallback() {
+    const selectElements = ['crypto-select', 'create-crypto'];
+
+    selectElements.forEach(selectId => {
+        const selectElement = document.getElementById(selectId);
+        if (!selectElement) return;
+
+        selectElement.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = ALLOWED_TRANSACTION_CRYPTO;
+        option.textContent = `${ALLOWED_TRANSACTION_CRYPTO} — ${cryptoPrices[ALLOWED_TRANSACTION_CRYPTO] || 0}€`;
+        selectElement.appendChild(option);
+        selectElement.value = ALLOWED_TRANSACTION_CRYPTO;
+    });
+}
+
+// ============ UPDATE CRYPTO PRICES FROM COINGECKO ============
+async function updateCryptoPrices() {
+    try {
+        await loadSolanaTokenList();
+    } catch (error) {
+        console.error('Error updating crypto prices:', error);
+    }
+}
+
+// ============ SELECT OVERLAY SETUP ============
+function setupSelectOverlay() {
+    const overlay = document.getElementById('selectOverlay');
+    if (!overlay) return;
+    const selectElements = document.querySelectorAll('select');
+
+    selectElements.forEach(select => {
+        select.addEventListener('focus', () => {
+            overlay.classList.add('active');
+        });
+
+        select.addEventListener('blur', () => {
+            overlay.classList.remove('active');
+        });
+    });
+
+    overlay.addEventListener('click', () => {
+        overlay.classList.remove('active');
+    });
+}
+
+// ============ SELLER SEARCH ============
+async function searchSeller() {
+    const sellerInput = document.getElementById('seller-input');
+    const statusDiv = document.getElementById('seller-status');
+
+    if (!sellerInput) return;
+
+    let handle = sellerInput.value.trim();
+
+    if (!handle) {
+        statusDiv.style.display = 'none';
+        return;
+    }
+
+    if (handle.startsWith('@')) {
+        handle = handle.substring(1);
+    }
+
+    statusDiv.style.display = 'flex';
+    statusDiv.className = 'seller-status loading';
+    statusDiv.innerHTML = '⏳ Vérification du compte...';
+
+    console.log('Searching for seller with handle:', handle);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users/handle/${encodeURIComponent(handle)}`);
+        const payload = await response.json();
+
+        if (response.ok && payload.ok && payload.user) {
+            const user = payload.user;
+            const displayName = user.Name || user.email || user.mail || handle;
+            const reputation = (user['réputation'] === undefined || user['réputation'] === null || String(user['réputation']).trim() === '')
+                ? 0
+                : user['réputation'];
+
+            statusDiv.className = 'seller-status success';
+            statusDiv.innerHTML = `✅ Utilisateur trouvé: <strong>${displayName}</strong> (Réputation: ${reputation}%)`;
+
+            sellerInput.dataset.sellerId = user.id || '';
+            sellerInput.dataset.sellerIdLogin = user.id_login || user.id || '';
+            sellerInput.dataset.sellerHandle = user.handle || handle;
+            sellerInput.dataset.sellerEmail = user.email || user.mail || '';
+            sellerInput.dataset.sellerName = displayName;
+            return;
+        }
+
+        statusDiv.className = 'seller-status error';
+        statusDiv.innerHTML = `❌ Aucun utilisateur trouvé avec le nom d'utilisateur "@${handle}"`;
+    } catch (error) {
+        console.error('Error searching for seller:', error);
+        statusDiv.className = 'seller-status error';
+        statusDiv.innerHTML = '❌ Erreur lors de la vérification du compte.';
+    }
+}
+
+async function persistTransactionInDatabase({ buyerIdLogin, counterpartyHandle, titre, cryptopaiement, montant, garantieperiode, isBuyerRole }) {
+    if (String(cryptopaiement || '').trim().toUpperCase() !== ALLOWED_TRANSACTION_CRYPTO) {
+        throw new Error(`Seules les transactions ${ALLOWED_TRANSACTION_CRYPTO} sont autorisées.`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            buyerIdLogin,
+            buyerName: AppData.currentUser?.name || '',
+            buyerMail: AppData.currentUser?.email || '',
+            counterpartyHandle,
+            titre,
+            cryptopaiement,
+            montant,
+            garantieperiode,
+            isBuyerRole
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible d\'enregistrer la transaction en base.');
+    }
+
+    return payload.transaction;
+}
+
+async function updateTransactionStatusInDatabase(dbTransactionId, statut) {
+    if (!dbTransactionId) return;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/statut`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statut })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour le statut en base.');
+    }
+}
+
+async function updateTransactionAmountInDatabase(dbTransactionId, montant) {
+    if (!dbTransactionId) return;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/montant`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ montant })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour le montant en base.');
+    }
+}
+
+async function updateTransactionWalletsInDatabase(dbTransactionId, walletVendeurEvm, walletVendeurPhantom) {
+    if (!dbTransactionId) return;
+
+    const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(dbTransactionId)}/wallets`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletVendeurEvm, walletVendeurPhantom })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de mettre à jour les wallets vendeur en base.');
+    }
+}
+
+async function ensureConversationForTransaction({ transactionId, buyerIdLogin, sellerIdLogin, senderIdLogin }) {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/from-transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            transactionId,
+            buyerIdLogin,
+            sellerIdLogin,
+            senderIdLogin
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de créer la conversation.');
+    }
+
+    return payload;
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function normalizeHandleValue(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    return raw.startsWith('@') ? raw.slice(1) : raw;
+}
+
+async function getEthersLibrary() {
+    if (typeof window !== 'undefined' && window.ethers) {
+        return window.ethers;
+    }
+
+    if (!ethersImportPromise) {
+        ethersImportPromise = import('https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm')
+            .then(module => module.ethers || module);
+    }
+
+    return ethersImportPromise;
+}
+
+async function downloadConversationAttachment(encodedUrl, encodedName) {
+    try {
+        const url = decodeURIComponent(String(encodedUrl || ''));
+        const fileName = decodeURIComponent(String(encodedName || 'piece-jointe'));
+        if (!url) throw new Error('Référence de fichier introuvable.');
+
+        const downloadUrl = `${API_BASE_URL}/api/attachments/download?reference=${encodeURIComponent(url)}&fileName=${encodeURIComponent(fileName)}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName || 'piece-jointe';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        alert(`❌ ${error.message}`);
+    }
+}
+
+async function loadConversationMessages(conversationId) {
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${encodeURIComponent(conversationId)}/messages`);
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible de charger les messages.');
+    }
+
+    return Array.isArray(payload.messages) ? payload.messages : [];
+}
+
+async function sendConversationMessage(conversationId, text) {
+    return sendConversationPayload(conversationId, { text });
+}
+
+async function sendConversationPayload(conversationId, payloadData) {
+    const text = String(payloadData?.text || '').trim();
+    const reference = String(payloadData?.reference || '').trim();
+    const attachmentName = String(payloadData?.attachmentName || '').trim();
+    const attachmentType = String(payloadData?.attachmentType || '').trim();
+    const attachmentSize = Number(payloadData?.attachmentSize || 0);
+
+    const body = {
+        senderIdLogin: AppData.currentUser?.id || '',
+        text
+    };
+
+    if (reference) {
+        body.reference = reference;
+        if (attachmentName) body.attachmentName = attachmentName;
+        if (attachmentType) body.attachmentType = attachmentType;
+        if (Number.isFinite(attachmentSize) && attachmentSize > 0) {
+            body.attachmentSize = attachmentSize;
+        }
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible d\'envoyer le message.');
+    }
+
+    return payload.message;
+}
+
+async function uploadAttachmentToFirebaseStorage(file, escrow) {
+    if (!file) {
+        throw new Error('Aucun fichier sélectionné.');
+    }
+
+    const toBase64 = (inputFile) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
+        reader.readAsDataURL(inputFile);
+    });
+
+    const base64Data = await toBase64(file);
+    const conversationToken = String(escrow.conversationId || 'conversation').trim();
+
+    const response = await fetch(`${API_BASE_URL}/api/conversations/${encodeURIComponent(conversationToken)}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            senderIdLogin: String(AppData.currentUser?.id || ''),
+            transactionId: String(escrow.dbTransactionId || ''),
+            fileName: String(file.name || 'piece-jointe'),
+            contentType: String(file.type || 'application/octet-stream'),
+            base64Data
+        })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || 'Impossible d\'uploader la pièce jointe.');
+    }
+
+    return {
+        reference: payload.reference,
+        attachmentName: payload.attachmentName || file.name || 'Pièce jointe',
+        attachmentType: payload.attachmentType || file.type || 'application/octet-stream',
+        attachmentSize: Number(payload.attachmentSize || file.size || 0)
+    };
+}
+
+function renderConversationMessages(escrow, messages, participantHandles = {}) {
+    const chatMessagesEl = document.getElementById(`chat-messages-${escrow.id}`);
+    if (!chatMessagesEl) return;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+        chatMessagesEl.innerHTML = '<div style="color:#94A3B8;">Aucun message pour le moment.</div>';
+        return;
+    }
+
+    const buyerHandle = normalizeHandleValue(participantHandles.buyerHandle);
+    const sellerHandle = normalizeHandleValue(participantHandles.sellerHandle);
+    const buyerIdToken = normalizeHandleValue(escrow.buyerIdLogin || '');
+    const sellerIdToken = normalizeHandleValue(escrow.sellerIdLogin || '');
+    const buyerTokens = [buyerHandle, buyerIdToken].filter(Boolean);
+    const sellerTokens = [sellerHandle, sellerIdToken].filter(Boolean);
+
+    const sortedMessages = [...messages].sort((a, b) => {
+        const aTime = toMillis(a?.createdAt) ?? 0;
+        const bTime = toMillis(b?.createdAt) ?? 0;
+        return bTime - aTime;
+    });
+
+    chatMessagesEl.innerHTML = sortedMessages.map((msg) => {
+        const sender = normalizeHandleValue(msg.senderId || '');
+        const isBuyerMessage = buyerTokens.includes(sender);
+        const isSellerMessage = sellerTokens.includes(sender);
+        const align = isBuyerMessage ? 'flex-end' : 'flex-start';
+        const bg = isBuyerMessage
+            ? 'rgba(59,130,246,0.22)'
+            : (isSellerMessage ? 'rgba(16,185,129,0.20)' : 'rgba(148,163,184,0.18)');
+        const senderLabel = isBuyerMessage ? 'Acheteur' : (isSellerMessage ? 'Vendeur' : 'Participant');
+        const senderLabelColor = isBuyerMessage
+            ? '#93C5FD'
+            : (isSellerMessage ? '#86EFAC' : '#94A3B8');
+        const dateValue = toMillis(msg.createdAt) ?? Date.now();
+        const attachmentName = String(msg.attachmentName || 'Pièce jointe');
+        const attachmentUrl = String(msg.reference || '');
+        const encodedAttachmentName = encodeURIComponent(attachmentName);
+        const encodedAttachmentUrl = encodeURIComponent(attachmentUrl);
+
+        return `
+            <div style="display:flex; justify-content:${align}; margin-bottom:0.5rem;">
+                <div style="max-width:85%; background:${bg}; border:1px solid rgba(148,163,184,0.25); border-radius:8px; padding:0.55rem 0.65rem;">
+                    <div style="color:${senderLabelColor}; font-size:0.74rem; margin-bottom:0.2rem; font-weight:600;">${senderLabel}</div>
+                    <div style="color:#E2E8F0; font-size:0.92rem; white-space:pre-wrap;">${escapeHtml(msg.text || '')}</div>
+                    ${msg.reference ? `<div style="margin-top:0.45rem;"><button type="button" class="button secondary" onclick="downloadConversationAttachment('${encodedAttachmentUrl}','${encodedAttachmentName}')" style="max-width:190px; padding:0.35rem 0.55rem;">📎 Télécharger ${escapeHtml(attachmentName)}</button></div>` : ''}
+                    <div style="color:#94A3B8; font-size:0.75rem; margin-top:0.25rem;">${new Date(dateValue).toLocaleString('fr-FR')}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    chatMessagesEl.scrollTop = 0;
+}
+
+async function resolveUserHandleByIdLogin(idLogin, fallbackValue = '') {
+    const normalizedId = String(idLogin || '').trim();
+    if (!normalizedId) return normalizeHandleValue(fallbackValue);
+
+    if (userHandleCacheByIdLogin[normalizedId] !== undefined) {
+        return userHandleCacheByIdLogin[normalizedId];
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users/id-login/${encodeURIComponent(normalizedId)}`);
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload.ok && payload.user) {
+            const resolvedHandle = normalizeHandleValue(payload.user.handle || fallbackValue);
+            userHandleCacheByIdLogin[normalizedId] = resolvedHandle;
+            return resolvedHandle;
+        }
+    } catch (error) {
+        console.error('Error resolving user handle by id_login:', error);
+    }
+
+    const fallback = normalizeHandleValue(fallbackValue || normalizedId);
+    userHandleCacheByIdLogin[normalizedId] = fallback;
+    return fallback;
+}
+
+async function refreshEscrowConversation(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow || !escrow.conversationId) return;
+
+    try {
+        const buyerHandle = await resolveUserHandleByIdLogin(escrow.buyerIdLogin, escrow.buyer);
+        const sellerHandle = await resolveUserHandleByIdLogin(escrow.sellerIdLogin, escrow.seller);
+        const messages = await loadConversationMessages(escrow.conversationId);
+        renderConversationMessages(escrow, messages, { buyerHandle, sellerHandle });
+    } catch (error) {
+        const chatMessagesEl = document.getElementById(`chat-messages-${escrow.id}`);
+        if (chatMessagesEl) {
+            chatMessagesEl.innerHTML = `<div style="color:#FCA5A5;">❌ ${escapeHtml(error.message)}</div>`;
+        }
+    }
+}
+
+async function submitEscrowMessage(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    if (!escrow.conversationId) {
+        try {
+            const conv = await ensureConversationForTransaction({
+                transactionId: escrow.dbTransactionId || '',
+                buyerIdLogin: escrow.buyerIdLogin || '',
+                sellerIdLogin: escrow.sellerIdLogin || '',
+                senderIdLogin: AppData.currentUser?.id || ''
+            });
+            escrow.conversationId = conv?.conversationId || '';
+            saveData();
+        } catch (error) {
+            alert(`❌ ${error.message || 'Conversation introuvable.'}`);
+            return;
+        }
+    }
+
+    if (!escrow.conversationId) {
+        alert('❌ Conversation introuvable.');
+        return;
+    }
+
+    const textInputEl = document.getElementById(`chat-input-${escrow.id}`);
+    const fileInputEl = document.getElementById(`chat-file-${escrow.id}`);
+    const text = String(textInputEl?.value || '').trim();
+    const hasFile = !!(fileInputEl && fileInputEl.files && fileInputEl.files.length > 0);
+
+    if (!text && !hasFile) {
+        alert('❌ Saisissez un message ou joignez un fichier.');
+        return;
+    }
+
+    try {
+        if (hasFile) {
+            const file = fileInputEl.files[0];
+            const uploadData = await uploadAttachmentToFirebaseStorage(file, escrow);
+            await sendConversationPayload(escrow.conversationId, {
+                text,
+                reference: uploadData.reference,
+                attachmentName: uploadData.attachmentName,
+                attachmentType: uploadData.attachmentType,
+                attachmentSize: uploadData.attachmentSize
+            });
+        } else {
+            await sendConversationMessage(escrow.conversationId, text);
+        }
+
+        if (fileInputEl) fileInputEl.value = '';
+        if (textInputEl) textInputEl.value = '';
+        await refreshEscrowConversation(escrowId);
+    } catch (error) {
+        alert(`❌ ${error.message}`);
+    }
+}
+
+function handleEscrowChatEnter(event, escrowId) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    submitEscrowMessage(escrowId);
+}
+
+async function renderEscrowConversationWindow(escrow) {
+    const chatEl = document.getElementById('detail-chat-block');
+    if (!chatEl) return;
+
+    if (escrow.status !== 'Accepté') {
+        chatEl.innerHTML = `<div class="alert alert-info">ℹ️ Le tchat sera disponible après acceptation de la transaction.</div>`;
+        return;
+    }
+
+    if (!escrow.conversationId) {
+        const conv = await ensureConversationForTransaction({
+            transactionId: escrow.dbTransactionId || '',
+            buyerIdLogin: escrow.buyerIdLogin || '',
+            sellerIdLogin: escrow.sellerIdLogin || '',
+            senderIdLogin: AppData.currentUser.id
+        });
+        escrow.conversationId = conv?.conversationId || '';
+        saveData();
+    }
+
+    chatEl.innerHTML = `
+        <div class="form-group" style="margin-top:0.5rem;">
+            <label>Salon de discussion privée</label>
+            <div id="chat-messages-${escrow.id}" style="height:220px; overflow:auto; background:rgba(2,6,23,0.35); border:1px solid rgba(148,163,184,0.25); border-radius:8px; padding:0.6rem;"></div>
+            <input id="chat-file-${escrow.id}" type="file" style="margin-top:0.55rem;">
+            <div style="display:flex; gap:0.5rem; margin-top:0.6rem;">
+                <input id="chat-input-${escrow.id}" type="text" placeholder="Écrire un message..." onkeydown="handleEscrowChatEnter(event, ${escrow.id})">
+                <button class="button success" type="button" onclick="submitEscrowMessage(${escrow.id})" style="max-width:130px;">Envoyer</button>
+            </div>
+        </div>
+    `;
+
+    await refreshEscrowConversation(escrow.id);
+}
+
+async function resolveUserNameByIdLogin(idLogin, fallbackValue) {
+    const normalizedId = String(idLogin || '').trim();
+    if (!normalizedId) return fallbackValue || '-';
+
+    if (userNameCacheByIdLogin[normalizedId]) {
+        return userNameCacheByIdLogin[normalizedId];
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users/id-login/${encodeURIComponent(normalizedId)}`);
+        const payload = await response.json();
+
+        if (response.ok && payload.ok && payload.user) {
+            const user = payload.user;
+            const name = user.Name || fallbackValue || normalizedId;
+            userNameCacheByIdLogin[normalizedId] = name;
+            return name;
+        }
+    } catch (error) {
+        console.error('Error resolving user name by id_login:', error);
+    }
+
+    return fallbackValue || normalizedId;
+}
+
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded', () => {
+    loadData();
+    loadSolanaTokenList();
+    setupSelectOverlay();
+
+    if (typeof firebase !== 'undefined') {
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                const displayName = user.displayName && user.displayName.trim()
+                    ? user.displayName
+                    : (user.email ? user.email.split('@')[0] : '');
+
+                AppData.currentUser = {
+                    id: user.uid,
+                    name: displayName,
+                    email: user.email,
+                    avatar: displayName ? _getInitials(displayName) : (user.email ? user.email[0].toUpperCase() : ''),
+                    role: 'buyer'
+                };
+                updateUserUI();
+                initCurrentPage();
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+    } else {
+        if (!AppData.currentUser || !AppData.currentUser.name) {
+            window.location.href = 'login.html';
+            return;
+        }
+        updateUserUI();
+        initCurrentPage();
+    }
+});
+
+/** Detect which page we're on and run the matching initialisation. */
+async function initCurrentPage() {
+    await loadTransactionsFromDatabase();
+
+    if (document.getElementById('dashboard'))    updateDashboard();
+    if (document.getElementById('escrows'))      displayEscrows();
+    if (document.getElementById('admin'))        updateAdmin();
+    if (document.getElementById('create'))       setCounterpartyRole(true);
+    if (document.getElementById('dashboard'))    await renderDashboardRecentTransactionsFromDatabase();
+
+    // Pending payment: navigated here from the dashboard quick-create form
+    const pendingPayment = sessionStorage.getItem('ofm_pending_payment');
+    if (pendingPayment && document.getElementById('payment')) {
+        sessionStorage.removeItem('ofm_pending_payment');
+        showPayment(parseInt(pendingPayment));
+    }
+
+    // Pending detail: navigated here from the dashboard recent-escrows list
+    const pendingDetail = sessionStorage.getItem('ofm_pending_detail');
+    if (pendingDetail && document.getElementById('escrow-detail')) {
+        sessionStorage.removeItem('ofm_pending_detail');
+        showEscrowDetail(parseInt(pendingDetail));
+        return;
+    }
+
+    await openSharedTransactionFromUrl();
+}
+
+function setCounterpartyRole(isBuyer) {
+    isBuyerRole = !!isBuyer;
+
+    const hidden = document.getElementById('is-buyer-input');
+    if (hidden) hidden.value = isBuyerRole ? 'true' : 'false';
+
+    const buyerBtn = document.getElementById('role-buyer-btn');
+    const sellerBtn = document.getElementById('role-seller-btn');
+    const handleLabel = document.getElementById('counterparty-handle-label');
+
+    if (handleLabel) {
+        handleLabel.textContent = isBuyerRole
+            ? '👤 Renseigner le nom d\'utilisateur du vendeur'
+            : '👤 Renseigner le nom d\'utilisateur de l\'acheteur';
+    }
+
+    if (!buyerBtn || !sellerBtn) return;
+
+    buyerBtn.className = isBuyerRole ? 'button success' : 'button secondary';
+    sellerBtn.className = isBuyerRole ? 'button secondary' : 'button success';
+}
+
+async function loadTransactionsFromDatabase() {
+    if (!AppData.currentUser || !AppData.currentUser.id) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/transactions?userIdLogin=${encodeURIComponent(AppData.currentUser.id)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !Array.isArray(payload.transactions)) return;
+
+        const existingByDbId = new Map(
+            AppData.escrows
+                .filter(escrow => escrow.dbTransactionId)
+                .map(escrow => [String(escrow.dbTransactionId), escrow])
+        );
+
+        payload.transactions.forEach(transaction => {
+            const txId = String(transaction.id || '');
+            if (!txId) return;
+
+            const createdAt = toMillis(transaction.datecreation) ?? Date.now();
+            const guaranteeHours = Number(transaction.garantieperiode) || 48;
+            const buyerId = String(transaction.acheteur || '').trim();
+            const sellerId = String(transaction.vendeur || '').trim();
+            const initiatorId = String(transaction.initiateur || '').trim();
+            const buyerName = String(transaction.acheteur_name || '').trim();
+            const sellerName = String(transaction.vendeur_name || '').trim();
+
+            const mappedFields = {
+                dbTransactionId: txId,
+                initiatorIdLogin: initiatorId,
+                buyerIdLogin: buyerId,
+                sellerIdLogin: sellerId,
+                sellerWalletAddress: String(transaction.walletVendeurEvm || '').trim(),
+                sellerWalletConnected: !!String(transaction.walletVendeurEvm || '').trim(),
+                sellerSolanaWalletAddress: String(transaction.walletVendeurPhantom || '').trim(),
+                sellerSolanaWalletConnected: !!String(transaction.walletVendeurPhantom || '').trim(),
+                walletIdsSaved: !!String(transaction.walletVendeurEvm || '').trim() || !!String(transaction.walletVendeurPhantom || '').trim(),
+                datecreation: createdAt,
+                amount: Number(transaction.montant) || 0,
+                crypto: transaction.cryptopaiement || ALLOWED_TRANSACTION_CRYPTO,
+                title: transaction.titre || 'Transaction',
+                isBuyerRole: buyerId === AppData.currentUser.id,
+                status: transaction.statut || 'En attente',
+                buyer: buyerName || (buyerId === AppData.currentUser.id ? AppData.currentUser.name : (buyerId || 'Acheteur')),
+                seller: sellerName || (sellerId === AppData.currentUser.id ? AppData.currentUser.name : (sellerId || 'Vendeur')),
+                buyerEmail: AppData.currentUser.email || '',
+                sellerEmail: '',
+                description: transaction.titre || 'Transaction',
+                created: createdAt,
+                expires: createdAt + (guaranteeHours * 3_600_000)
+            };
+
+            const existing = existingByDbId.get(txId);
+            if (existing) {
+                Object.assign(existing, mappedFields);
+                if (!Array.isArray(existing.timeline) || existing.timeline.length === 0) {
+                    existing.timeline = [{ status: 'created', time: createdAt, label: 'Transaction importée depuis la base' }];
+                }
+                return;
+            }
+
+            AppData.escrows.push({
+                id: AppData.nextEscrowId++,
+                ...mappedFields,
+                timeline: [{ status: 'created', time: createdAt, label: 'Transaction importée depuis la base' }]
+            });
+        });
+
+        saveData();
+    } catch (error) {
+        console.error('Error loading transactions from database:', error);
+    }
+}
+
+function buildTransactionShareUrl(escrow) {
+    const baseUrl = new URL('transactions.html', window.location.href);
+    if (escrow.dbTransactionId) {
+        baseUrl.searchParams.set('tx', String(escrow.dbTransactionId));
+    } else {
+        baseUrl.searchParams.set('escrow', String(escrow.id));
+    }
+    return baseUrl.toString();
+}
+
+async function copyTransactionShareLink(escrowId) {
+    const escrow = AppData.escrows.find(item => item.id === escrowId);
+    if (!escrow) {
+        alert('❌ Transaction introuvable.');
+        return;
+    }
+
+    const url = buildTransactionShareUrl(escrow);
+    try {
+        await navigator.clipboard.writeText(url);
+        alert('✅ Lien de partage copié.');
+    } catch (_error) {
+        alert('❌ Impossible de copier le lien.');
+    }
+}
+
+async function openSharedTransactionFromUrl() {
+    if (!document.getElementById('escrow-detail')) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const txId = String(params.get('tx') || '').trim();
+    const localEscrowId = parseInt(params.get('escrow') || '', 10);
+
+    if (txId) {
+        let escrow = AppData.escrows.find(item => String(item.dbTransactionId || '') === txId);
+
+        if (!escrow) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/transactions/${encodeURIComponent(txId)}`);
+                const payload = await response.json();
+
+                if (response.ok && payload.ok && payload.transaction) {
+                    const transaction = payload.transaction;
+                    const createdAt = toMillis(transaction.datecreation) ?? Date.now();
+                    const guaranteeHours = Number(transaction.garantieperiode) || 48;
+                    const buyerId = String(transaction.acheteur || '').trim();
+                    const sellerId = String(transaction.vendeur || '').trim();
+                    const initiatorId = String(transaction.initiateur || '').trim();
+                    const buyerName = String(transaction.acheteur_name || '').trim();
+                    const sellerName = String(transaction.vendeur_name || '').trim();
+
+                    escrow = {
+                        id: AppData.nextEscrowId++,
+                        dbTransactionId: txId,
+                        initiatorIdLogin: initiatorId,
+                        buyerIdLogin: buyerId,
+                        sellerIdLogin: sellerId,
+                        sellerWalletAddress: String(transaction.walletVendeurEvm || '').trim(),
+                        sellerWalletConnected: !!String(transaction.walletVendeurEvm || '').trim(),
+                        sellerSolanaWalletAddress: String(transaction.walletVendeurPhantom || '').trim(),
+                        sellerSolanaWalletConnected: !!String(transaction.walletVendeurPhantom || '').trim(),
+                        walletIdsSaved: !!String(transaction.walletVendeurEvm || '').trim() || !!String(transaction.walletVendeurPhantom || '').trim(),
+                        datecreation: createdAt,
+                        amount: Number(transaction.montant) || 0,
+                        crypto: transaction.cryptopaiement || ALLOWED_TRANSACTION_CRYPTO,
+                        title: transaction.titre || 'Transaction',
+                        isBuyerRole: buyerId === AppData.currentUser.id,
+                        status: transaction.statut || 'En attente',
+                        buyer: buyerName || (buyerId || 'Acheteur'),
+                        seller: sellerName || (sellerId || 'Vendeur'),
+                        buyerEmail: '',
+                        sellerEmail: '',
+                        description: transaction.titre || 'Transaction',
+                        created: createdAt,
+                        expires: createdAt + (guaranteeHours * 3_600_000),
+                        timeline: [{ status: 'created', time: createdAt, label: 'Transaction chargée via lien partagé' }]
+                    };
+
+                    AppData.escrows.push(escrow);
+                    saveData();
+                }
+            } catch (error) {
+                console.error('Error loading shared transaction:', error);
+            }
+        }
+
+        if (escrow) {
+            showEscrowDetail(escrow.id);
+        }
+
+        return;
+    }
+
+    if (!Number.isNaN(localEscrowId)) {
+        const escrow = AppData.escrows.find(item => item.id === localEscrowId);
+        if (escrow) showEscrowDetail(escrow.id);
+    }
+}
+
+async function renderDashboardRecentTransactionsFromDatabase() {
+    const recentEl = document.getElementById('recent-escrows');
+    if (!recentEl) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/transactions`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !Array.isArray(payload.transactions)) return;
+
+        const recentTransactions = payload.transactions
+            .slice()
+            .sort((a, b) => (toMillis(b.datecreation) ?? 0) - (toMillis(a.datecreation) ?? 0))
+            .slice(0, 5);
+
+        if (recentTransactions.length === 0) {
+            recentEl.innerHTML = '<p style="color: #94A3B8;">Aucune transaction pour le moment</p>';
+            return;
+        }
+
+        recentEl.innerHTML = recentTransactions.map(tx => {
+            const amount = Number(tx.montant) || 0;
+            const crypto = tx.cryptopaiement || ALLOWED_TRANSACTION_CRYPTO;
+            const price = cryptoPrices[crypto] || 1;
+            const cryptoAmount = (amount / price).toFixed(3);
+            const title = tx.titre || 'Transaction';
+            const txDateCreation = toMillis(tx.datecreation);
+            const createdLe = txDateCreation ? new Date(txDateCreation).toLocaleDateString('fr-FR') : '-';
+            const buyerName = tx.acheteur_name || tx.acheteur || '-';
+            const sellerName = tx.vendeur_name || tx.vendeur || '-';
+            const statut = tx.statut || 'En attente';
+            const badgeClass = statut === 'Accepté'
+                ? 'status-released'
+                : (statut === 'Refusé' ? 'status-dispute' : 'status-pending');
+            const txId = String(tx.id || '').trim();
+            const transactionDetailUrl = `transactions.html?tx=${encodeURIComponent(txId)}`;
+
+            return `
+                <div class="item" onclick="window.location.href='${transactionDetailUrl}'" style="cursor:pointer;">
+                    <div class="item-header">
+                        <div>
+                            <div class="item-title">${title}</div>
+                            <div style="color:#94A3B8; font-size:0.85rem; margin-top:0.2rem;">${cryptoAmount} ${crypto} = ${amount}€</div>
+                        </div>
+                        <div class="status-badge ${badgeClass}">${statut}</div>
+                    </div>
+                    <div class="item-meta">
+                        <span>Acheteur: ${buyerName}</span>
+                        <span>Vendeur: ${sellerName}</span>
+                        <span>Créée le: ${createdLe}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error rendering dashboard DB transactions:', error);
+    }
+}
+
+// ============ STORAGE ============
+function saveData() {
+    try {
+        localStorage.setItem('ofm_pro_data', JSON.stringify(AppData));
+    } catch (e) {
+        console.log('LocalStorage unavailable');
+    }
+}
+
+function loadData() {
+    try {
+        const saved = localStorage.getItem('ofm_pro_data');
+        if (saved) Object.assign(AppData, JSON.parse(saved));
+    } catch (e) {
+        console.log('LocalStorage unavailable');
+    }
+}
+
+// ============ UI / TAB NAVIGATION ============
+/**
+ * Show a tab.
+ * If the tab exists on the current page → show it in place.
+ * Otherwise → navigate to the page that hosts it.
+ */
+function switchTab(tabId) {
+    const el = document.getElementById(tabId);
+
+    if (!el) {
+        // Tab lives on another page — redirect there
+        window.location.href = PAGE_TABS[tabId] || 'index.html';
+        return;
+    }
+
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    el.classList.add('active');
+    window.scrollTo(0, 0);
+
+    if (tabId === 'escrows') displayEscrows();
+    if (tabId === 'admin')   updateAdmin();
+}
+
+// ============ USER / LOGIN HELPERS ============
+function updateUserUI() {
+    const userProfile = document.querySelector('.user-profile');
+    const navLogin    = document.getElementById('nav-login');
+    const navLogout   = document.getElementById('nav-logout');
+
+    if (AppData.currentUser) {
+        const name = AppData.currentUser.name || AppData.currentUser.email || 'Utilisateur';
+        if (userProfile) {
+            userProfile.style.display = 'flex';
+            document.getElementById('userAvatar').textContent =
+                AppData.currentUser.avatar || _getInitials(name);
+            document.getElementById('userName').textContent = name;
+            userProfile.onclick = () => {
+                if (confirm('Voulez‑vous vous déconnecter ?')) logout();
+            };
+        }
+        if (navLogin)  navLogin.style.display  = 'none';
+        if (navLogout) navLogout.style.display = 'block';
+    } else {
+        if (userProfile) userProfile.style.display = 'none';
+        if (navLogin)    navLogin.style.display    = 'block';
+        if (navLogout)   navLogout.style.display   = 'none';
+    }
+}
+
+function _getInitials(name) {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase();
+}
+
+function logout() {
+    if (typeof firebase !== 'undefined') {
+        firebase.auth().signOut().then(() => {
+            AppData.currentUser = null;
+            window.location.href = 'login.html';
+        });
+    } else {
+        AppData.currentUser = null;
+        saveData();
+        window.location.href = 'login.html';
+    }
+}
+
+function assertLoggedIn() {
+    if (!AppData.currentUser || !AppData.currentUser.name) {
+        alert('❌ Veuillez vous connecter.');
+        window.location.href = 'login.html';
+        return false;
+    }
+    return true;
+}
+
+// ============ AMOUNT HELPERS ============
+function updateAmountInfo() {
+    const cryptoEl = document.getElementById('crypto-select');
+    const amountEl = document.getElementById('amount-input');
+    if (!cryptoEl || !amountEl) return;
+
+    const crypto  = cryptoEl.value;
+    const amount  = parseFloat(amountEl.value) || 0;
+    const cryptoAmount = (amount / cryptoPrices[crypto]).toFixed(6);
+
+    const info     = document.getElementById('amount-info');
+    const infoText = document.getElementById('amount-info-text');
+    if (!info || !infoText) return;
+    info.style.display = 'block';
+    infoText.textContent = `${amount} EUR = ${cryptoAmount} ${crypto}`;
+}
+
+function updateCreateInfo() {
+    const cryptoEl = document.getElementById('create-crypto');
+    const amountEl = document.getElementById('create-amount');
+    if (!cryptoEl || !amountEl) return;
+
+    const crypto  = cryptoEl.value;
+    const amount  = parseFloat(amountEl.value) || 0;
+    const cryptoAmount = (amount / cryptoPrices[crypto]).toFixed(6);
+    const commission   = (amount * 0.05).toFixed(2);
+    const vendorGets   = amount.toFixed(2);
+
+    const info    = document.getElementById('create-info');
+    const summary = document.getElementById('create-summary');
+    if (!info || !summary) return;
+
+    info.style.display = 'block';
+    document.getElementById('create-info-text').textContent = `Vous enverrez: ${cryptoAmount} ${crypto}`;
+
+    summary.style.display = 'block';
+    document.getElementById('create-summary-content').innerHTML = `
+        <div>Total: ${amount}€ en ${crypto}</div>
+        <div>Commission (5%): ${commission}€ → Vous</div>
+        <div>Vendeur Reçoit: ${vendorGets}€</div>
+    `;
+}
+
+// ============ ESCROW CREATION (Dashboard quick form) ============
+async function createEscrow() {
+    if (!assertLoggedIn()) return;
+
+    const sellerInput = document.getElementById('seller-input');
+    if (!sellerInput) { alert('❌ Champ vendeur introuvable'); return; }
+    const sellerName = sellerInput.dataset.sellerName || sellerInput.value.trim();
+    const sellerEmail = sellerInput.dataset.sellerEmail || '';
+    if (!sellerName) { alert('❌ Veuillez renseigner un vendeur'); return; }
+    const sellerHandleRaw = sellerInput.dataset.sellerHandle || sellerInput.value.trim();
+    const sellerHandle = sellerHandleRaw.startsWith('@') ? sellerHandleRaw.slice(1) : sellerHandleRaw;
+    const crypto    = document.getElementById('crypto-select').value;
+    const amount    = parseFloat(document.getElementById('amount-input').value);
+    const guarantee = parseInt(document.getElementById('guarantee-select').value);
+    const titleEl = document.getElementById('transaction-title');
+    const title = titleEl ? titleEl.value.trim() : '';
+    const isBuyerInput = document.getElementById('is-buyer-input');
+    const roleIsBuyer = isBuyerInput ? isBuyerInput.value !== 'false' : isBuyerRole;
+    if (!guarantee || guarantee <= 0) { alert('❌ Période de garantie invalide'); return; }
+    if (!amount || amount <= 0) { alert('❌ Montant invalide'); return; }
+    if (String(crypto || '').toUpperCase() !== ALLOWED_TRANSACTION_CRYPTO) { alert(`❌ Seules les transactions ${ALLOWED_TRANSACTION_CRYPTO} sont autorisées.`); return; }
+    if (!title) { alert('❌ Veuillez renseigner un titre de transaction'); return; }
+    if (!sellerHandle) { alert('❌ Veuillez renseigner le nom d\'utilisateur de la contrepartie'); return; }
+
+    let persistedTransaction = null;
+    try {
+        persistedTransaction = await persistTransactionInDatabase({
+            buyerIdLogin: AppData.currentUser.id,
+            counterpartyHandle: sellerHandle,
+            titre: title,
+            cryptopaiement: crypto,
+            montant: amount,
+            garantieperiode: guarantee,
+            isBuyerRole: roleIsBuyer
+        });
+    } catch (error) {
+        alert(`❌ ${error.message}`);
+        return;
+    }
+
+    const newEscrow = _buildEscrow({
+        sellerName,
+        sellerEmail,
+        crypto,
+        amount,
+        guarantee,
+        title,
+        isBuyerRole: roleIsBuyer,
+        dbTransactionId: persistedTransaction ? persistedTransaction.id : null,
+        datecreation: persistedTransaction ? toMillis(persistedTransaction.datecreation) : null
+    });
+    AppData.escrows.push(newEscrow);
+    saveData();
+    currentEscrowId = newEscrow.id;
+    showEscrowDetail(newEscrow.id);
+}
+
+// ============ ESCROW CREATION (Full form on create.html) ============
+function submitCreateEscrow() {
+    if (!assertLoggedIn()) return;
+
+    const sellerRaw = document.getElementById('create-seller').value;
+    if (!sellerRaw) { alert('❌ Sélectionnez un vendeur'); return; }
+
+    const [sellerName, sellerEmail] = sellerRaw.split('|');
+    const crypto      = document.getElementById('create-crypto').value;
+    const amount      = parseFloat(document.getElementById('create-amount').value);
+    const guarantee   = parseInt(document.getElementById('create-guarantee').value);
+    if (!guarantee || guarantee <= 0) { alert('❌ Période de garantie invalide'); return; }
+    if (String(crypto || '').toUpperCase() !== ALLOWED_TRANSACTION_CRYPTO) { alert(`❌ Seules les transactions ${ALLOWED_TRANSACTION_CRYPTO} sont autorisées.`); return; }
+    const description = document.getElementById('create-description').value;
+
+    if (!amount || amount <= 0) { alert('❌ Montant invalide'); return; }
+
+    const newEscrow = _buildEscrow({ sellerName, sellerEmail, crypto, amount, guarantee, description });
+    AppData.escrows.push(newEscrow);
+    saveData();
+    currentEscrowId = newEscrow.id;
+    showEscrowDetail(newEscrow.id);
+}
+
+/**
+ * Internal factory – builds a new escrow object.
+ */
+function _buildEscrow({ sellerName, sellerEmail, crypto, amount, guarantee, title = 'Transaction multi-crypto', description, isBuyerRole = true, dbTransactionId = null, datecreation = null }) {
+    const escrowDescription = (description && description.trim()) || title;
+    const now = toMillis(datecreation) ?? Date.now();
+    return {
+        id:          AppData.nextEscrowId++,
+        dbTransactionId,
+        initiatorIdLogin: AppData.currentUser.id,
+        amount,
+        crypto,
+        title,
+        isBuyerRole,
+        status:      'En attente',
+        buyer:       AppData.currentUser.name,
+        seller:      sellerName,
+        buyerEmail:  AppData.currentUser.email,
+        sellerEmail,
+        description: escrowDescription,
+        datecreation: now,
+        created:     now,
+        expires:     now + (guarantee * 3_600_000),
+        timeline:    [{ status: 'created', time: now, label: 'Escrow créé' }]
+    };
+}
+
+// ============ PAYMENT PAGE ============
+function showPayment(escrowId) {
+    currentEscrowId = escrowId;
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    // If payment tab is not on this page, save id and navigate to create.html
+    if (!document.getElementById('payment')) {
+        sessionStorage.setItem('ofm_pending_payment', escrowId);
+        window.location.href = 'create.html';
+        return;
+    }
+
+    const cryptoAmount = (escrow.amount / cryptoPrices[escrow.crypto]).toFixed(6);
+    const commission   = (escrow.amount * 0.05).toFixed(2);
+    const vendorGets   = escrow.amount.toFixed(2);
+
+    document.getElementById('payment-id').textContent              = 'ESC-2025-' + String(escrow.id).padStart(5, '0');
+    document.getElementById('payment-crypto-amount').textContent   = cryptoAmount + ' ' + escrow.crypto;
+    document.getElementById('payment-commission').textContent      = commission + '€ (5%)';
+    document.getElementById('payment-seller-gets').textContent     = vendorGets + '€';
+    document.getElementById('payment-usdt').textContent            = escrow.amount + ' EUR (équivalent USDT)';
+    document.getElementById('payment-crypto-type').textContent     = escrow.crypto;
+    document.getElementById('payment-exact-amount').textContent    = cryptoAmount + ' ' + escrow.crypto;
+
+    switchTab('payment');
+    startCountdown();
+}
+
+function confirmPayment() {
+    const escrow = AppData.escrows.find(e => e.id === currentEscrowId);
+    if (!escrow) return;
+
+    escrow.status = 'LOCKED';
+    escrow.timeline.push({ status: 'paid',   time: Date.now(), label: 'Paiement reçu' });
+    escrow.timeline.push({ status: 'locked', time: Date.now(), label: 'Fonds verrouillés (Smart Contract)' });
+
+    AppData.payments.push({
+        id:        'PAY-' + Date.now(),
+        escrowId:  currentEscrowId,
+        amount:    escrow.amount,
+        crypto:    escrow.crypto,
+        timestamp: Date.now()
+    });
+
+    saveData();
+    const hoursLeft = ((escrow.expires - Date.now()) / 3_600_000).toFixed(1);
+    alert(`✅ Paiement confirmé! Les fonds sont maintenant verrouillés dans le smart contract Polygon.\n\nLe vendeur peut maintenant livrer. Vous avez ${hoursLeft}h pour confirmer.`);
+    window.location.href = 'index.html';
+}
+
+function copyPaymentAddress() {
+    const address = document.getElementById('payment-address').textContent;
+    navigator.clipboard.writeText(address).then(() => {
+        alert('✅ Adresse copiée dans le presse-papiers!');
+    });
+}
+
+function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    let seconds = 30 * 60;
+
+    const countdownEl = document.getElementById('countdown');
+    if (!countdownEl) return;
+
+    const tick = () => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        countdownEl.textContent =
+            String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        if (seconds <= 0) clearInterval(countdownInterval);
+    };
+
+    countdownInterval = setInterval(() => { seconds--; tick(); }, 1000);
+    tick();
+}
+
+// ============ ESCROW DETAIL ============
+async function showEscrowDetail(escrowId) {
+    // If detail tab is not on this page, save id and navigate to transactions.html
+    if (!document.getElementById('escrow-detail')) {
+        sessionStorage.setItem('ofm_pending_detail', escrowId);
+        window.location.href = 'transactions.html';
+        return;
+    }
+
+    currentEscrowId = escrowId;
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+    const isInitiator = escrow.initiatorIdLogin
+        ? String(escrow.initiatorIdLogin) === String(AppData.currentUser.id)
+        : false;
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+    const isBuyerUser = escrow.buyerIdLogin
+        ? String(escrow.buyerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.buyer || '') === String(AppData.currentUser.name || '');
+
+    const cryptoAmount = (escrow.amount / cryptoPrices[escrow.crypto]).toFixed(3);
+    const commission   = (escrow.amount * 0.05).toFixed(2);
+    const vendorAmount = (escrow.amount * 0.95).toFixed(2);
+
+    document.getElementById('detail-id').textContent            = escrow.title || escrow.description || 'Transaction';
+    const detailAmountEl = document.getElementById('detail-amount');
+    if (isInitiator) {
+        detailAmountEl.innerHTML = `
+            <div style="display:flex; gap:0.4rem; align-items:center; justify-content:flex-end;">
+                <input id="detail-amount-input" type="number" min="0.01" step="0.01" value="${Number(escrow.amount || 0).toFixed(2)}" style="max-width:130px; text-align:right;">
+                <button type="button" class="button secondary" onclick="saveInitiatorAmount(${escrow.id})" style="max-width:120px; padding:0.35rem 0.6rem;">Enregistrer</button>
+            </div>
+        `;
+    } else {
+        detailAmountEl.textContent = `${Number(escrow.amount || 0).toFixed(2)} € (${cryptoAmount} ${escrow.crypto})`;
+    }
+    document.getElementById('detail-commission').textContent    = commission + '€';
+    document.getElementById('detail-seller-amount').textContent = vendorAmount + '€';
+
+    const statusMap = {
+        LOCKED:   '🔒 VERROUILLÉ',
+        RELEASED: '✅ LIBÉRÉ',
+        DISPUTE:  '⚠️ DISPUTE',
+        REFUNDED: '💰 REMBOURSÉ',
+        'En attente': '⏱️ EN ATTENTE',
+        'Accepté': '✅ ACCEPTÉ',
+        'Refusé':  '❌ REFUSÉ'
+    };
+    document.getElementById('detail-status').textContent =
+        statusMap[escrow.status] || '⏱️ EN ATTENTE';
+
+    document.getElementById('detail-expires').textContent = new Date(escrow.expires).toLocaleString('fr-FR');
+
+    // Parties
+    const buyerDisplayName = await resolveUserNameByIdLogin(escrow.buyerIdLogin, escrow.buyer);
+    const sellerDisplayName = await resolveUserNameByIdLogin(escrow.sellerIdLogin, escrow.seller);
+
+    document.getElementById('detail-buyer').textContent       = buyerDisplayName;
+    document.getElementById('detail-buyer-email').textContent = escrow.buyerEmail;
+    document.getElementById('detail-buyer-rep').innerHTML = '';
+
+    document.getElementById('detail-seller').textContent       = sellerDisplayName;
+    document.getElementById('detail-seller-email').textContent = escrow.sellerEmail;
+    document.getElementById('detail-seller-rep').innerHTML = '';
+
+    // Timeline
+    const createdTs = toMillis(escrow.datecreation) ?? toMillis(escrow.created) ?? Date.now();
+    const createdLabel = new Date(createdTs).toLocaleString('fr-FR');
+    const currentStatus = escrow.status || 'En attente';
+
+    document.getElementById('detail-timeline').innerHTML = escrow.timeline.map(item => {
+        const isInitialCreatedEvent = item.status === 'created' || item.label === 'Escrow créé';
+        const timelineLabel = isInitialCreatedEvent
+            ? `Statut: ${currentStatus} — Créée le: ${createdLabel}`
+            : item.label;
+        const timelineTime = isInitialCreatedEvent ? createdTs : item.time;
+
+        return `
+        <div class="timeline-item ${item.status !== 'pending' ? 'completed' : ''}">
+            <div class="timeline-dot"></div>
+            <div>
+                <div class="timeline-title">${timelineLabel}</div>
+                <div class="timeline-time">${new Date(timelineTime).toLocaleString('fr-FR')}</div>
+            </div>
+        </div>
+    `;
+    }).join('');
+
+    // Progress bar
+    const elapsed     = Date.now() - escrow.created;
+    const total       = escrow.expires - escrow.created;
+    const percentage  = Math.min(100, (elapsed / total) * 100);
+    document.getElementById('detail-progress').style.width = percentage + '%';
+    document.getElementById('detail-progress-text').textContent = Math.round(percentage) + '%';
+
+    // Alert
+    const alertMap = {
+        LOCKED:   `<div class="alert alert-success">✅ Fonds sécurisés dans le smart contract Polygon</div>`,
+        RELEASED: `<div class="alert alert-success">✅ Fonds libérés au vendeur</div>`,
+        DISPUTE:  `<div class="alert alert-danger">⚠️ Litige en cours d'arbitrage</div>`,
+        REFUNDED: `<div class="alert alert-info">💰 Fonds remboursés à l'acheteur</div>`
+    };
+    document.getElementById('detail-alert').innerHTML = alertMap[escrow.status] || '';
+
+    const engagementSellerValue = String(escrow.engagementText || '').trim();
+    const engagementBuyerValue = String(escrow.engagementBuyerText || '').trim();
+    const sellerEvmWalletValue = escrow.sellerWalletConnected ? String(escrow.sellerWalletAddress || '').trim() : '';
+    const sellerPhantomWalletValue = escrow.sellerSolanaWalletConnected ? String(escrow.sellerSolanaWalletAddress || '').trim() : '';
+    const sellerBlockEl = document.getElementById('detail-seller-block');
+    if (sellerBlockEl) {
+        sellerBlockEl.innerHTML = `
+            ${isSellerUser ? `<button class="button ${escrow.sellerWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerWallet(${escrow.id})" style="max-width:220px; margin-bottom:0.6rem;">🔌 Connect MetaMask</button>` : ''}
+            ${isSellerUser ? `<button class="button ${escrow.sellerSolanaWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerPhantomWallet(${escrow.id})" style="max-width:280px; margin-bottom:0.6rem;">👻 Connect Phantom (Solana)</button>` : ''}
+            <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.35rem;">
+                <label style="font-size:0.82rem;">Wallet EVM</label>
+                <div class="input-with-icon">
+                    <input id="detail-wallet-evm-input" type="text" ${isSellerUser ? '' : 'readonly'} placeholder="0x..." value="${escapeHtml(sellerEvmWalletValue)}">
+                    ${isSellerUser ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'evm')" title="Coller l'ID wallet EVM">📋</button>` : ''}
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.5rem;">
+                <label style="font-size:0.82rem;">Wallet Phantom (Solana)</label>
+                <div class="input-with-icon">
+                    <input id="detail-wallet-phantom-input" type="text" ${isSellerUser ? '' : 'readonly'} placeholder="Adresse Solana..." value="${escapeHtml(sellerPhantomWalletValue)}">
+                    ${isSellerUser ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'phantom')" title="Coller l'ID wallet Phantom">📋</button>` : ''}
+                </div>
+            </div>
+            ${isSellerUser ? `<button class="button ${escrow.walletIdsSaved ? 'secondary' : 'success'}" type="button" onclick="saveSellerWalletIds(${escrow.id})" style="max-width:250px; margin-bottom:0.6rem;">Enregistrer IDs portefeuille</button>` : ''}
+            <div class="card-title" style="margin-top:0.7rem;">Engagement vendeur</div>
+            <textarea id="detail-engagement-seller-input" ${isSellerUser ? '' : 'readonly'} placeholder="Saisir un engagement..." style="min-height:110px;">${escapeHtml(engagementSellerValue)}</textarea>
+            ${isSellerUser ? `<button class="button success" type="button" onclick="saveEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+        `;
+    }
+
+    const buyerBlockEl = document.getElementById('detail-buyer-block');
+    if (buyerBlockEl) {
+        buyerBlockEl.innerHTML = `
+            <div class="card-title" style="margin-top:0.2rem;">Engagement acheteur</div>
+            <textarea id="detail-engagement-buyer-input" ${isBuyerUser ? '' : 'readonly'} placeholder="Saisir un engagement acheteur..." style="min-height:110px;">${escapeHtml(engagementBuyerValue)}</textarea>
+            ${isBuyerUser ? `<button class="button success" type="button" onclick="saveBuyerEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+        `;
+    }
+
+    // Actions
+    let actionsHtml = '';
+
+    if (escrow.status === 'En attente' && !isInitiator) {
+        actionsHtml = `
+            <div class="alert alert-info">ℹ️ Vous n'êtes pas l'initiateur. Acceptez ou refusez cette transaction.</div>
+            <button class="button success" onclick="acceptTransaction(${escrow.id})" style="margin-bottom: 0.5rem;">✅ Accepter</button>
+            <button class="button danger" onclick="refuseTransaction(${escrow.id})">❌ Refuser</button>
+        `;
+    } else if (escrow.status === 'En attente' && isInitiator) {
+        actionsHtml = `<div class="alert alert-info">ℹ️ En attente de la réponse de la contrepartie.</div>`;
+    }
+
+    if (escrow.status === 'LOCKED' && escrow.buyer === AppData.currentUser.name) {
+        actionsHtml = `
+            <div class="alert alert-info">ℹ️ Vous êtes l'acheteur. Confirmez la livraison ou ouvrez un litige.</div>
+            <button class="button success" onclick="confirmDelivery(${escrow.id})" style="margin-bottom: 0.5rem;">✅ Confirmer Livraison</button>
+            <button class="button danger"  onclick="openDispute(${escrow.id})">⚠️ Ouvrir Litige</button>
+        `;
+    } else if (escrow.status === 'LOCKED' && escrow.seller === AppData.currentUser.name) {
+        actionsHtml = `<div class="alert alert-info">ℹ️ Vous êtes le vendeur. En attente de confirmation acheteur.</div>`;
+    }
+    if (escrow.status !== 'Accepté') {
+        actionsHtml += `
+            <div class="divider"></div>
+            <div class="form-group" style="margin-top:0.5rem;">
+                <label>Lien partageable</label>
+                <div class="input-with-icon">
+                    <input type="text" readonly value="${buildTransactionShareUrl(escrow)}">
+                    <button type="button" class="icon-button" onclick="copyTransactionShareLink(${escrow.id})" title="Copier le lien">📋</button>
+                </div>
+            </div>
+        `;
+    }
+    document.getElementById('detail-actions').innerHTML = actionsHtml;
+
+    try {
+        await renderEscrowConversationWindow(escrow);
+    } catch (error) {
+        const chatEl = document.getElementById('detail-chat-block');
+        if (chatEl) {
+            chatEl.innerHTML = `<div class="alert alert-danger">❌ ${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    switchTab('escrow-detail');
+}
+
+async function connectSellerWallet(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (!isSellerUser) {
+        alert('❌ Seul le vendeur peut connecter son wallet.');
+        return;
+    }
+
+    if (typeof window === 'undefined' || !window.ethereum) {
+        alert('❌ MetaMask introuvable. Installez ou activez MetaMask.');
+        return;
+    }
+
+    try {
+        const ethersLib = await getEthersLibrary();
+        const provider = new ethersLib.BrowserProvider(window.ethereum);
+        await provider.send('eth_requestAccounts', []);
+        const signer = await provider.getSigner();
+        const walletAddress = await signer.getAddress();
+
+        escrow.sellerWalletConnected = true;
+        escrow.sellerWalletAddress = walletAddress;
+        saveData();
+        await showEscrowDetail(escrowId);
+        alert(`✅ Wallet vendeur connecté : ${walletAddress}`);
+    } catch (error) {
+        alert(`❌ Connexion wallet impossible: ${error.message || 'Erreur inconnue.'}`);
+    }
+}
+
+async function connectSellerPhantomWallet(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (!isSellerUser) {
+        alert('❌ Seul le vendeur peut connecter son wallet Phantom.');
+        return;
+    }
+
+    const provider = window?.solana;
+    if (!provider || !provider.isPhantom) {
+        alert('❌ Wallet Phantom introuvable. Installez ou activez Phantom.');
+        return;
+    }
+
+    try {
+        const response = await provider.connect();
+        const publicKey = String(response?.publicKey?.toString?.() || provider.publicKey?.toString?.() || '').trim();
+
+        if (!publicKey) {
+            throw new Error('Adresse Phantom introuvable après connexion.');
+        }
+
+        escrow.sellerSolanaWalletConnected = true;
+        escrow.sellerSolanaWalletAddress = publicKey;
+        saveData();
+        await showEscrowDetail(escrowId);
+        alert(`✅ Wallet Phantom connecté : ${publicKey}`);
+    } catch (error) {
+        alert(`❌ Connexion Phantom impossible: ${error.message || 'Erreur inconnue.'}`);
+    }
+}
+
+async function pasteSellerWalletId(escrowId, walletType) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (!isSellerUser) {
+        alert('❌ Seul le vendeur peut renseigner les IDs portefeuille.');
+        return;
+    }
+
+    try {
+        const clipboardText = String(await navigator.clipboard.readText() || '').trim();
+        if (!clipboardText) {
+            alert('❌ Le presse-papiers est vide.');
+            return;
+        }
+
+        if (walletType === 'evm') {
+            const evmInput = document.getElementById('detail-wallet-evm-input');
+            if (evmInput) evmInput.value = clipboardText;
+        } else {
+            const phantomInput = document.getElementById('detail-wallet-phantom-input');
+            if (phantomInput) phantomInput.value = clipboardText;
+        }
+
+        await saveSellerWalletIds(escrowId, false);
+    } catch (error) {
+        alert(`❌ Impossible de lire le presse-papiers: ${error.message || 'Erreur inconnue.'}`);
+    }
+}
+
+async function saveSellerWalletIds(escrowId, withSuccessPopup = true) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (!isSellerUser) {
+        alert('❌ Seul le vendeur peut enregistrer les IDs portefeuille.');
+        return;
+    }
+
+    const evmInput = document.getElementById('detail-wallet-evm-input');
+    const phantomInput = document.getElementById('detail-wallet-phantom-input');
+
+    const evmValue = String(evmInput?.value || '').trim();
+    const phantomValue = String(phantomInput?.value || '').trim();
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionWalletsInDatabase(escrow.dbTransactionId, evmValue, phantomValue);
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.sellerWalletAddress = evmValue;
+    escrow.sellerWalletConnected = !!evmValue;
+
+    escrow.sellerSolanaWalletAddress = phantomValue;
+    escrow.sellerSolanaWalletConnected = !!phantomValue;
+    escrow.walletIdsSaved = true;
+
+    saveData();
+
+    if (withSuccessPopup) {
+        alert('✅ IDs portefeuille enregistrés.');
+    }
+}
+
+function saveEngagementText(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isSellerUser = escrow.sellerIdLogin
+        ? String(escrow.sellerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.seller || '') === String(AppData.currentUser.name || '');
+
+    if (!isSellerUser) {
+        alert('❌ Seul le vendeur peut modifier l\'engagement.');
+        return;
+    }
+
+    const inputEl = document.getElementById('detail-engagement-seller-input');
+    if (!inputEl) return;
+
+    escrow.engagementText = String(inputEl.value || '').trim();
+    saveData();
+    alert('✅ Engagement enregistré.');
+}
+
+function saveBuyerEngagementText(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isBuyerUser = escrow.buyerIdLogin
+        ? String(escrow.buyerIdLogin) === String(AppData.currentUser.id)
+        : String(escrow.buyer || '') === String(AppData.currentUser.name || '');
+
+    if (!isBuyerUser) {
+        alert('❌ Seul l\'acheteur peut modifier l\'engagement acheteur.');
+        return;
+    }
+
+    const inputEl = document.getElementById('detail-engagement-buyer-input');
+    if (!inputEl) return;
+
+    escrow.engagementBuyerText = String(inputEl.value || '').trim();
+    saveData();
+    alert('✅ Engagement acheteur enregistré.');
+}
+
+async function saveInitiatorAmount(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    const isInitiator = escrow.initiatorIdLogin
+        ? String(escrow.initiatorIdLogin) === String(AppData.currentUser.id)
+        : false;
+
+    if (!isInitiator) {
+        alert('❌ Seul l\'initiateur peut modifier le montant.');
+        return;
+    }
+
+    const inputEl = document.getElementById('detail-amount-input');
+    if (!inputEl) return;
+
+    const newAmount = Number(String(inputEl.value || '').replace(',', '.'));
+    if (!Number.isFinite(newAmount) || newAmount <= 0) {
+        alert('❌ Montant invalide.');
+        return;
+    }
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionAmountInDatabase(escrow.dbTransactionId, newAmount);
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.amount = newAmount;
+    saveData();
+    showEscrowDetail(escrowId);
+}
+
+// ============ DELIVERY / DISPUTE ============
+function confirmDelivery(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    escrow.status = 'RELEASED';
+    escrow.timeline.push({ status: 'delivered', time: Date.now(), label: 'Livraison confirmée' });
+    escrow.timeline.push({ status: 'released',  time: Date.now(), label: 'Fonds libérés au vendeur' });
+
+    saveData();
+    alert('✅ Livraison confirmée! Fonds libérés au vendeur.');
+    switchTab('escrows');
+}
+
+async function acceptTransaction(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Accepté');
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    try {
+        const conversation = await ensureConversationForTransaction({
+            transactionId: escrow.dbTransactionId || '',
+            buyerIdLogin: escrow.buyerIdLogin || '',
+            sellerIdLogin: escrow.sellerIdLogin || '',
+            senderIdLogin: AppData.currentUser.id
+        });
+        escrow.conversationId = conversation?.conversationId || escrow.conversationId || '';
+    } catch (error) {
+        alert(`⚠️ Transaction acceptée, mais chat non créé: ${error.message}`);
+    }
+
+    escrow.status = 'Accepté';
+    escrow.timeline.push({ status: 'accepted', time: Date.now(), label: 'Transaction acceptée par la contrepartie' });
+    saveData();
+    showEscrowDetail(escrowId);
+}
+
+async function refuseTransaction(escrowId) {
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    if (escrow.dbTransactionId) {
+        try {
+            await updateTransactionStatusInDatabase(escrow.dbTransactionId, 'Refusé');
+        } catch (error) {
+            alert(`❌ ${error.message}`);
+            return;
+        }
+    }
+
+    escrow.status = 'Refusé';
+    escrow.timeline.push({ status: 'refused', time: Date.now(), label: 'Transaction refusée par la contrepartie' });
+    saveData();
+    showEscrowDetail(escrowId);
+}
+
+function openDispute(escrowId) {
+    const reason = prompt('Raison du litige:');
+    if (!reason) return;
+
+    const escrow = AppData.escrows.find(e => e.id === escrowId);
+    if (!escrow) return;
+
+    escrow.status = 'DISPUTE';
+    escrow.timeline.push({ status: 'dispute', time: Date.now(), label: 'Litige ouvert' });
+
+    AppData.disputes.push({
+        id:       AppData.disputes.length + 1,
+        escrowId,
+        amount:   escrow.amount,
+        opener:   AppData.currentUser.name,
+        reason,
+        opened:   Date.now(),
+        status:   'OPEN'
+    });
+
+    saveData();
+    alert('✅ Litige ouvert! Un arbitre examinera votre cas dans les 24-48 heures.');
+    switchTab('escrows');
+}
+
+function resolveDispute(escrowId, decision) {
+    const escrow  = AppData.escrows.find(e => e.id === escrowId);
+    const dispute = AppData.disputes.find(d => d.escrowId === escrowId);
+    if (!escrow) return;
+
+    if (decision === 'REFUND') {
+        escrow.status = 'REFUNDED';
+        escrow.timeline.push({ status: 'refunded', time: Date.now(), label: 'Remboursé à acheteur' });
+    } else if (decision === 'RELEASE') {
+        escrow.status = 'RELEASED';
+        escrow.timeline.push({ status: 'released', time: Date.now(), label: 'Libéré au vendeur' });
+    }
+
+    if (dispute) {
+        dispute.status     = 'RESOLVED';
+        dispute.resolution = decision;
+    }
+
+    saveData();
+    alert(`✅ Dispute résolu!\n${decision === 'REFUND' ? 'Remboursement à acheteur' : 'Libération au vendeur'}`);
+    updateAdmin();
+}
+
+// ============ DASHBOARD RENDERING ============
+function updateDashboard() {
+    const total      = AppData.escrows.length;
+    const locked     = AppData.escrows.filter(e => e.status === 'LOCKED').length;
+    const released   = AppData.escrows.filter(e => e.status === 'RELEASED').length;
+    const disputed   = AppData.disputes.filter(d => d.status === 'OPEN').length;
+    const totalValue = AppData.escrows.reduce((sum, e) => sum + e.amount, 0);
+    const success    = total > 0 ? ((released / total) * 100).toFixed(1) : 0;
+
+    const el = id => document.getElementById(id);
+    if (!el('stat-total')) return; // not on dashboard page
+
+    el('stat-total').textContent        = total;
+    el('stat-total-change').textContent = total > 0 ? '+' + locked : '+0';
+    el('stat-value').textContent        = '$' + totalValue.toFixed(0);
+    el('stat-disputes').textContent     = disputed;
+    el('stat-success').textContent      = success + '%';
+
+    const recentHtml = AppData.escrows.slice(-5).reverse().map(e => _escrowItemHtml(e)).join('');
+    el('recent-escrows').innerHTML =
+        recentHtml || '<p style="color: #94A3B8;">Aucune transaction pour le moment</p>';
+}
+
+// ============ ESCROW LIST ============
+function displayEscrows() {
+    const listEl = document.getElementById('escrows-list');
+    if (!listEl) return;
+
+    const html = AppData.escrows.length === 0
+        ? '<p style="color: #94A3B8; padding: 1.5rem;">Aucune transaction</p>'
+        : AppData.escrows.map(e => _escrowItemHtml(e)).join('');
+
+    listEl.innerHTML = html;
+}
+
+/** Builds a single escrow list-item HTML string. */
+function _escrowItemHtml(e) {
+    const cryptoAmount = (e.amount / cryptoPrices[e.crypto]).toFixed(3);
+    const title = (e.title && String(e.title).trim()) ? e.title : (e.description || 'Transaction multi-crypto');
+    const createdTs = Number(e.datecreation) || 0;
+    const createdLe = createdTs ? new Date(createdTs).toLocaleDateString('fr-FR') : '-';
+    const statusMap = {
+        LOCKED:   { cls: 'status-locked',   text: '🔒 LOCKED' },
+        RELEASED: { cls: 'status-released', text: '✅ LIBÉRÉ' },
+        DISPUTE:  { cls: 'status-dispute',  text: '⚠️ DISPUTE' },
+        'Accepté': { cls: 'status-released', text: '✅ ACCEPTÉ' },
+        'Refusé':  { cls: 'status-dispute',  text: '❌ REFUSÉ' },
+        'En attente': { cls: 'status-pending', text: '⏱️ EN ATTENTE' }
+    };
+    const { cls, text } = statusMap[e.status] || { cls: 'status-pending', text: '⏱️ EN ATTENTE' };
+
+    return `
+        <div class="item" onclick="showEscrowDetail(${e.id})">
+            <div class="item-header">
+                <div>
+                    <div class="item-title">${title}</div>
+                    <div style="color:#94A3B8; font-size:0.85rem; margin-top:0.2rem;">${cryptoAmount} ${e.crypto} = ${e.amount}€</div>
+                </div>
+                <div class="status-badge ${cls}">${text}</div>
+            </div>
+            <div class="item-meta">
+                <span>De: ${e.buyer}</span>
+                <span>À: ${e.seller}</span>
+                <span>Créée le: ${createdLe}</span>
+            </div>
+        </div>
+    `;
+}
+
+// ============ ADMIN PANEL ============
+function updateAdmin() {
+    const el = id => document.getElementById(id);
+    if (!el('admin-total')) return; // not on admin page
+
+    const total      = AppData.escrows.length;
+    const locked     = AppData.escrows.filter(e => e.status === 'LOCKED').length;
+    const released   = AppData.escrows.filter(e => e.status === 'RELEASED').length;
+    const refunded   = AppData.escrows.filter(e => e.status === 'REFUNDED').length;
+    const totalValue = AppData.escrows.reduce((sum, e) => sum + e.amount, 0);
+    const commission = (totalValue * 0.05).toFixed(2);
+    const success    = total > 0 ? ((released / total) * 100).toFixed(1) : 0;
+    const disputeRate= total > 0 ? ((AppData.disputes.length / total) * 100).toFixed(1) : 0;
+
+    el('admin-total').textContent          = total;
+    el('admin-locked').textContent         = locked;
+    el('admin-released').textContent       = released;
+    el('admin-refunded').textContent       = refunded;
+    el('admin-disputes-count').textContent = AppData.disputes.filter(d => d.status === 'OPEN').length;
+    el('admin-success').textContent        = success + '%';
+    el('admin-commission').textContent     = '$' + commission;
+    el('admin-tvl').textContent            = '$' + totalValue.toFixed(0);
+    el('admin-daily').textContent          = '~' + Math.ceil(AppData.escrows.length / 1);
+    el('admin-avg-time').textContent       = '4h 30m';
+    el('admin-dispute-rate').textContent   = disputeRate + '%';
+
+    // Open disputes
+    const openDisputes = AppData.disputes.filter(d => d.status === 'OPEN');
+    el('admin-disputes').innerHTML = openDisputes.length === 0
+        ? '<p style="color: #94A3B8;">Aucun litige actuellement</p>'
+        : openDisputes.map(d => `
+            <div class="item">
+                <div class="item-header">
+                    <div class="item-title">Litige #${d.id} - ${d.amount}€</div>
+                    <div class="status-badge status-dispute">OUVERT</div>
+                </div>
+                <div class="item-meta">
+                    <span>Ouvert par: ${d.opener}</span>
+                    <span>Raison: ${d.reason}</span>
+                </div>
+                <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <button class="button secondary" onclick="resolveDispute(${d.escrowId}, 'REFUND')">💰 Rembourser</button>
+                    <button class="button secondary" onclick="resolveDispute(${d.escrowId}, 'RELEASE')">✅ Libérer</button>
+                </div>
+            </div>
+        `).join('');
+
+    // All deals
+    el('admin-all-deals').innerHTML = AppData.escrows.length === 0
+        ? '<p style="color: #94A3B8;">Aucun deal n\'a été créé</p>'
+        : AppData.escrows.map(e => {
+            const comm = (e.amount * 0.05).toFixed(2);
+            const badgeMap = { LOCKED: 'status-locked', RELEASED: 'status-released', DISPUTE: 'status-dispute' };
+            const badge = badgeMap[e.status] || 'status-pending';
+            return `
+                <div class="item">
+                    <div class="item-header">
+                        <div>
+                            <div class="item-title">#ESC-${e.id} - ${e.amount}€</div>
+                            <div class="item-meta">
+                                <span>${e.buyer} → ${e.seller}</span>
+                                <span>Commission: ${comm}€</span>
+                            </div>
+                        </div>
+                        <div class="status-badge ${badge}">${e.status}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+}
