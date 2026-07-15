@@ -1,0 +1,10 @@
+{
+  "name": "ofm-escrow-pro-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo Frontend statique deja dans dist",
+    "start": "echo Servi par le backend Express"
+  }
+}
+

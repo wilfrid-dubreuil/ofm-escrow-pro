@@ -49,63 +49,41 @@ let ethersImportPromise = null;
 const ALLOWED_TRANSACTION_CRYPTO = 'SOL';
 const DEFAULT_REFERRAL_HANDLE = 'actarus';
 
+function showElement(element) {
+    if (!element) return;
+    element.classList.remove('hidden');
+}
+
+function hideElement(element) {
+    if (!element) return;
+    element.classList.add('hidden');
+}
+
 function showSelectablePopup(message) {
     const text = String(message || '');
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(2,6,23,0.65)';
-    overlay.style.zIndex = '99999';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.padding = '1rem';
+    overlay.className = 'selectable-popup-overlay';
 
     const box = document.createElement('div');
-    box.style.width = 'min(720px, 96vw)';
-    box.style.background = '#0F172A';
-    box.style.border = '1px solid rgba(148,163,184,0.35)';
-    box.style.borderRadius = '10px';
-    box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
-    box.style.padding = '1rem';
+    box.className = 'selectable-popup-box';
 
     const isError = text.includes('❌') || text.toLowerCase().includes('error') || text.toLowerCase().includes('unauthorized') || text.toLowerCase().includes('permission');
     const title = document.createElement('div');
     title.textContent = isError ? 'Erreur' : 'Information';
-    title.style.color = isError ? '#FCA5A5' : '#93C5FD';
-    title.style.fontWeight = '700';
-    title.style.marginBottom = '0.55rem';
+    title.className = `selectable-popup-title ${isError ? 'is-error' : 'is-info'}`;
 
     const textArea = document.createElement('textarea');
     textArea.readOnly = true;
     textArea.value = text;
-    textArea.style.width = '100%';
-    textArea.style.minHeight = '120px';
-    textArea.style.maxHeight = '48vh';
-    textArea.style.resize = 'vertical';
-    textArea.style.background = 'rgba(15,23,42,0.8)';
-    textArea.style.color = '#E2E8F0';
-    textArea.style.border = '1px solid rgba(148,163,184,0.35)';
-    textArea.style.borderRadius = '8px';
-    textArea.style.padding = '0.65rem';
-    textArea.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-    textArea.style.fontSize = '0.85rem';
+    textArea.className = 'selectable-popup-textarea';
 
     const actions = document.createElement('div');
-    actions.style.display = 'flex';
-    actions.style.justifyContent = 'flex-end';
-    actions.style.gap = '0.55rem';
-    actions.style.marginTop = '0.7rem';
+    actions.className = 'selectable-popup-actions';
 
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.textContent = 'Copier';
-    copyBtn.style.background = '#1D4ED8';
-    copyBtn.style.color = '#fff';
-    copyBtn.style.border = 'none';
-    copyBtn.style.borderRadius = '6px';
-    copyBtn.style.padding = '0.45rem 0.8rem';
-    copyBtn.style.cursor = 'pointer';
+    copyBtn.className = 'selectable-popup-btn selectable-popup-btn-copy';
     copyBtn.onclick = async () => {
         try {
             await navigator.clipboard.writeText(text);
@@ -120,12 +98,7 @@ function showSelectablePopup(message) {
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.textContent = 'OK';
-    closeBtn.style.background = '#2563EB';
-    closeBtn.style.color = '#fff';
-    closeBtn.style.border = 'none';
-    closeBtn.style.borderRadius = '6px';
-    closeBtn.style.padding = '0.45rem 0.8rem';
-    closeBtn.style.cursor = 'pointer';
+    closeBtn.className = 'selectable-popup-btn selectable-popup-btn-ok';
 
     const close = () => {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -339,7 +312,7 @@ async function searchSeller() {
     let handle = sellerInput.value.trim();
 
     if (!handle) {
-        statusDiv.style.display = 'none';
+        hideElement(statusDiv);
         return;
     }
 
@@ -347,7 +320,7 @@ async function searchSeller() {
         handle = handle.substring(1);
     }
 
-    statusDiv.style.display = 'flex';
+    showElement(statusDiv);
     statusDiv.className = 'seller-status loading';
     statusDiv.innerHTML = '⏳ Vérification du compte...';
 
@@ -639,49 +612,35 @@ async function openProfileEditor() {
     const affiliations = Array.isArray(profile.affiliations) ? profile.affiliations : [];
 
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(2,6,23,0.7)';
-    overlay.style.zIndex = '99999';
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'center';
-    overlay.style.alignItems = 'center';
-    overlay.style.padding = '1rem';
+    overlay.className = 'profile-overlay';
 
     const box = document.createElement('div');
-    box.style.width = 'min(860px, 98vw)';
-    box.style.maxHeight = '92vh';
-    box.style.overflow = 'auto';
-    box.style.background = '#0F172A';
-    box.style.border = '1px solid rgba(148,163,184,0.35)';
-    box.style.borderRadius = '12px';
-    box.style.padding = '1rem';
-    box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
+    box.className = 'profile-modal';
 
     const affiliationsHtml = affiliations.length === 0
-        ? '<div style="color:#94A3B8; font-size:0.85rem;">Aucune affiliation enregistrée.</div>'
+        ? '<div class="profile-affiliations-empty">Aucune affiliation enregistrée.</div>'
         : affiliations.map(item => {
             const parrain = normalizeHandleValue(item.parrainHandle || '-');
             const dateDebut = formatDateTime(item['dateDébut']);
             const dateFin = item['dateFin'] === null ? 'Active' : formatDateTime(item['dateFin']);
             return `
-                <div style="border:1px solid rgba(71,85,105,0.35); border-radius:8px; padding:0.55rem 0.65rem; margin-bottom:0.45rem; background:rgba(15,23,42,0.5);">
-                    <div style="color:#E2E8F0; font-size:0.86rem;"><strong>Parrain:</strong> ${parrain ? '@' + escapeHtml(parrain) : '-'}</div>
-                    <div style="color:#94A3B8; font-size:0.8rem; margin-top:0.2rem;"><strong>Début:</strong> ${escapeHtml(dateDebut)} | <strong>Fin:</strong> ${escapeHtml(dateFin)}</div>
+                <div class="profile-affiliation-item">
+                    <div class="profile-affiliation-top"><strong>Parrain:</strong> ${parrain ? '@' + escapeHtml(parrain) : '-'}</div>
+                    <div class="profile-affiliation-meta"><strong>Début:</strong> ${escapeHtml(dateDebut)} | <strong>Fin:</strong> ${escapeHtml(dateFin)}</div>
                 </div>
             `;
         }).join('');
 
     box.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; margin-bottom:0.9rem;">
-            <div style="font-size:1.05rem; font-weight:700; color:#E2E8F0;">Mon profil</div>
-            <button type="button" class="button secondary" id="profile-close-btn" style="max-width:120px; padding:0.4rem 0.55rem;">Fermer</button>
+        <div class="profile-modal-header">
+            <div class="profile-modal-title">Mon profil</div>
+            <button type="button" class="button secondary profile-close-btn" id="profile-close-btn">Fermer</button>
         </div>
 
-        <div class="content-grid" style="grid-template-columns:1fr 1fr; gap:0.85rem; margin-bottom:0.9rem;">
-            <div class="card" style="padding:0.8rem;">
-                <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Informations utilisateur</div>
-                <div style="display:grid; gap:0.35rem; font-size:0.88rem; color:#E2E8F0;">
+        <div class="content-grid profile-grid">
+            <div class="card profile-card">
+                <div class="card-title profile-card-title">Informations utilisateur</div>
+                <div class="profile-user-info">
                     <div><strong>Nom:</strong> ${escapeHtml(currentName || '-')}</div>
                     <div><strong>Handle:</strong> ${currentHandle ? '@' + escapeHtml(currentHandle) : '-'}</div>
                     <div><strong>Email:</strong> ${escapeHtml(currentEmail || '-')}</div>
@@ -690,31 +649,31 @@ async function openProfileEditor() {
                 </div>
             </div>
 
-            <div class="card" style="padding:0.8rem;">
-                <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Modifier le code parrain</div>
-                <div class="form-group" style="margin-bottom:0.55rem;">
-                    <label style="font-size:0.8rem;">Code parrain actuel</label>
+            <div class="card profile-card">
+                <div class="card-title profile-card-title">Modifier le code parrain</div>
+                <div class="form-group profile-compact-form-group">
+                    <label class="profile-compact-label">Code parrain actuel</label>
                     <input id="profile-current-referral" type="text" readonly value="${currentReferral ? '@' + escapeHtml(currentReferral) : '-'}">
                 </div>
-                <div class="form-group" style="margin-bottom:0.55rem;">
-                    <label style="font-size:0.8rem;">Nouveau code parrain (handle)</label>
-                    <div style="display:flex; gap:0.45rem; align-items:center;">
+                <div class="form-group profile-compact-form-group">
+                    <label class="profile-compact-label">Nouveau code parrain (handle)</label>
+                    <div class="profile-referral-row">
                         <input id="profile-new-referral" type="text" placeholder="Ex : pierre110" value="${escapeHtml(currentReferral)}">
-                        <button type="button" class="button secondary" id="profile-verify-referral" style="max-width:110px; padding:0.45rem 0.55rem;">Vérifier</button>
+                        <button type="button" class="button secondary profile-verify-btn" id="profile-verify-referral">Vérifier</button>
                     </div>
                 </div>
-                <div id="profile-referral-status" class="seller-status" style="display:none;"></div>
-                <button type="button" class="button success" id="profile-save-referral" style="margin-top:0.6rem;">Enregistrer code parrain</button>
+                <div id="profile-referral-status" class="seller-status profile-referral-status hidden"></div>
+                <button type="button" class="button success profile-save-btn" id="profile-save-referral">Enregistrer code parrain</button>
             </div>
         </div>
 
-        <div class="card" style="padding:0.8rem;">
-            <div class="card-title" style="font-size:0.95rem; margin-bottom:0.55rem;">Historique affiliations</div>
+        <div class="card profile-card">
+            <div class="card-title profile-card-title">Historique affiliations</div>
             ${affiliationsHtml}
         </div>
 
-        <div style="display:flex; justify-content:flex-end; margin-top:0.8rem;">
-            <button type="button" class="button danger" id="profile-logout-btn" style="max-width:160px;">Se déconnecter</button>
+        <div class="profile-actions-row">
+            <button type="button" class="button danger profile-logout-btn" id="profile-logout-btn">Se déconnecter</button>
         </div>
     `;
 
@@ -728,12 +687,12 @@ async function openProfileEditor() {
     const applyProfileReferralStyle = () => {
         if (!newReferralInput) return;
         const normalized = normalizeHandleValue(newReferralInput.value || '');
-        newReferralInput.style.color = normalized === DEFAULT_REFERRAL_HANDLE ? '#94A3B8' : '#E2E8F0';
+        newReferralInput.classList.toggle('is-default-referral', normalized === DEFAULT_REFERRAL_HANDLE);
     };
 
     const setStatus = (kind, message) => {
         if (!statusEl) return;
-        statusEl.style.display = 'flex';
+        showElement(statusEl);
         statusEl.className = `seller-status ${kind}`;
         statusEl.textContent = message;
     };
@@ -769,8 +728,8 @@ async function openProfileEditor() {
     newReferralInput?.addEventListener('input', () => {
         applyProfileReferralStyle();
         if (!statusEl) return;
-        statusEl.style.display = 'none';
         statusEl.className = 'seller-status';
+        hideElement(statusEl);
         statusEl.textContent = '';
     });
 
@@ -929,7 +888,7 @@ function renderConversationMessages(escrow, messages, participantHandles = {}) {
     if (!chatMessagesEl) return;
 
     if (!Array.isArray(messages) || messages.length === 0) {
-        chatMessagesEl.innerHTML = '<div style="color:#94A3B8;">Aucun message pour le moment.</div>';
+        chatMessagesEl.innerHTML = '<div class="chat-empty">Aucun message pour le moment.</div>';
         return;
     }
 
@@ -950,14 +909,8 @@ function renderConversationMessages(escrow, messages, participantHandles = {}) {
         const sender = normalizeHandleValue(msg.senderId || '');
         const isBuyerMessage = buyerTokens.includes(sender);
         const isSellerMessage = sellerTokens.includes(sender);
-        const align = isBuyerMessage ? 'flex-end' : 'flex-start';
-        const bg = isBuyerMessage
-            ? 'rgba(59,130,246,0.22)'
-            : (isSellerMessage ? 'rgba(16,185,129,0.20)' : 'rgba(148,163,184,0.18)');
         const senderLabel = isBuyerMessage ? 'Acheteur' : (isSellerMessage ? 'Vendeur' : 'Participant');
-        const senderLabelColor = isBuyerMessage
-            ? '#93C5FD'
-            : (isSellerMessage ? '#86EFAC' : '#94A3B8');
+        const messageRoleClass = isBuyerMessage ? 'buyer' : (isSellerMessage ? 'seller' : 'other');
         const dateValue = toMillis(msg.createdAt) ?? Date.now();
         const attachmentName = String(msg.attachmentName || 'Pièce jointe');
         const attachmentUrl = String(msg.reference || '');
@@ -965,12 +918,12 @@ function renderConversationMessages(escrow, messages, participantHandles = {}) {
         const encodedAttachmentUrl = encodeURIComponent(attachmentUrl);
 
         return `
-            <div style="display:flex; justify-content:${align}; margin-bottom:0.5rem;">
-                <div style="max-width:85%; background:${bg}; border:1px solid rgba(148,163,184,0.25); border-radius:8px; padding:0.55rem 0.65rem;">
-                    <div style="color:${senderLabelColor}; font-size:0.74rem; margin-bottom:0.2rem; font-weight:600;">${senderLabel}</div>
-                    <div style="color:#E2E8F0; font-size:0.92rem; white-space:pre-wrap;">${escapeHtml(msg.text || '')}</div>
-                    ${msg.reference ? `<div style="margin-top:0.45rem;"><button type="button" class="button secondary" onclick="downloadConversationAttachment('${encodedAttachmentUrl}','${encodedAttachmentName}')" style="max-width:190px; padding:0.35rem 0.55rem;">📎 Télécharger ${escapeHtml(attachmentName)}</button></div>` : ''}
-                    <div style="color:#94A3B8; font-size:0.75rem; margin-top:0.25rem;">${new Date(dateValue).toLocaleString('fr-FR')}</div>
+            <div class="chat-row ${messageRoleClass}">
+                <div class="chat-bubble ${messageRoleClass}">
+                    <div class="chat-sender ${messageRoleClass}">${senderLabel}</div>
+                    <div class="chat-text">${escapeHtml(msg.text || '')}</div>
+                    ${msg.reference ? `<div class="chat-attachment-row"><button type="button" class="button secondary chat-attachment-btn" onclick="downloadConversationAttachment('${encodedAttachmentUrl}','${encodedAttachmentName}')">📎 Télécharger ${escapeHtml(attachmentName)}</button></div>` : ''}
+                    <div class="chat-time">${new Date(dateValue).toLocaleString('fr-FR')}</div>
                 </div>
             </div>
         `;
@@ -1016,7 +969,7 @@ async function refreshEscrowConversation(escrowId) {
     } catch (error) {
         const chatMessagesEl = document.getElementById(`chat-messages-${escrow.id}`);
         if (chatMessagesEl) {
-            chatMessagesEl.innerHTML = `<div style="color:#FCA5A5;">❌ ${escapeHtml(error.message)}</div>`;
+            chatMessagesEl.innerHTML = `<div class="chat-error">❌ ${escapeHtml(error.message)}</div>`;
         }
     }
 }
@@ -1106,13 +1059,13 @@ async function renderEscrowConversationWindow(escrow) {
     }
 
     chatEl.innerHTML = `
-        <div class="form-group" style="margin-top:0.5rem;">
+        <div class="form-group mt-05">
             <label>Salon de discussion privée</label>
-            <div id="chat-messages-${escrow.id}" style="height:220px; overflow:auto; background:rgba(2,6,23,0.35); border:1px solid rgba(148,163,184,0.25); border-radius:8px; padding:0.6rem;"></div>
-            <input id="chat-file-${escrow.id}" type="file" style="margin-top:0.55rem;">
-            <div style="display:flex; gap:0.5rem; margin-top:0.6rem;">
+            <div id="chat-messages-${escrow.id}" class="chat-messages"></div>
+            <input id="chat-file-${escrow.id}" type="file" class="chat-file-input">
+            <div class="chat-input-row">
                 <input id="chat-input-${escrow.id}" type="text" placeholder="Écrire un message..." onkeydown="handleEscrowChatEnter(event, ${escrow.id})">
-                <button class="button success" type="button" onclick="submitEscrowMessage(${escrow.id})" style="max-width:130px;">Envoyer</button>
+                <button class="button success chat-send-btn" type="button" onclick="submitEscrowMessage(${escrow.id})">Envoyer</button>
             </div>
         </div>
     `;
@@ -1449,7 +1402,7 @@ async function renderDashboardRecentTransactionsFromDatabase() {
             .slice(0, 5);
 
         if (recentTransactions.length === 0) {
-            recentEl.innerHTML = '<p style="color: #94A3B8;">Aucune transaction pour le moment</p>';
+            recentEl.innerHTML = '<p class="text-muted">Aucune transaction pour le moment</p>';
             return;
         }
 
@@ -1471,11 +1424,11 @@ async function renderDashboardRecentTransactionsFromDatabase() {
             const transactionDetailUrl = `transactions.html?tx=${encodeURIComponent(txId)}`;
 
             return `
-                <div class="item" onclick="window.location.href='${transactionDetailUrl}'" style="cursor:pointer;">
+                <div class="item item-clickable" onclick="window.location.href='${transactionDetailUrl}'">
                     <div class="item-header">
                         <div>
                             <div class="item-title">${title}</div>
-                            <div style="color:#94A3B8; font-size:0.85rem; margin-top:0.2rem;">${cryptoAmount} ${crypto} = ${amount}€</div>
+                            <div class="item-subtitle">${cryptoAmount} ${crypto} = ${amount}€</div>
                         </div>
                         <div class="status-badge ${badgeClass}">${statut}</div>
                     </div>
@@ -1539,21 +1492,45 @@ function updateUserUI() {
     const navLogin    = document.getElementById('nav-login');
     const navLogout   = document.getElementById('nav-logout');
 
+    // ── Sidebar elements ──
+    const sidebarAvatar  = document.getElementById('sidebarAvatar');
+    const sidebarName    = document.getElementById('sidebarName');
+    const topbarUserBtn  = document.getElementById('topbarUserBtn');
+
     if (AppData.currentUser) {
-        const name = AppData.currentUser.name || AppData.currentUser.email || 'Utilisateur';
+        const name     = AppData.currentUser.name || AppData.currentUser.email || 'Utilisateur';
+        const initials = _getInitials(name);
+
+        // Legacy top-nav (kept for non-shell pages)
         if (userProfile) {
-            userProfile.style.display = 'flex';
-            document.getElementById('userAvatar').textContent =
-                AppData.currentUser.avatar || _getInitials(name);
-            document.getElementById('userName').textContent = name;
+            showElement(userProfile);
+            const avatarEl = document.getElementById('userAvatar');
+            const nameEl   = document.getElementById('userName');
+            if (avatarEl) avatarEl.textContent = AppData.currentUser.avatar || initials;
+            if (nameEl)   nameEl.textContent   = name;
             userProfile.onclick = () => { openProfileEditor(); };
         }
-        if (navLogin)  navLogin.style.display  = 'none';
-        if (navLogout) navLogout.style.display = 'block';
+
+        // Sidebar profile
+        if (sidebarAvatar) sidebarAvatar.textContent = initials;
+        if (sidebarName)   sidebarName.textContent   = name;
+        const sidebarSubLogin = document.getElementById('sidebarSub');
+        if (sidebarSubLogin) sidebarSubLogin.textContent = 'Compte vérifié';
+        if (topbarUserBtn) topbarUserBtn.textContent  = initials;
+
+        hideElement(navLogin);
+        showElement(navLogout);
     } else {
-        if (userProfile) userProfile.style.display = 'none';
-        if (navLogin)    navLogin.style.display    = 'block';
-        if (navLogout)   navLogout.style.display   = 'none';
+        hideElement(userProfile);
+        showElement(navLogin);
+        hideElement(navLogout);
+
+        // Sidebar — état non connecté
+        if (sidebarAvatar) sidebarAvatar.textContent = '?';
+        if (sidebarName)   sidebarName.textContent   = 'Non connecté';
+        const sidebarSubLogout = document.getElementById('sidebarSub');
+        if (sidebarSubLogout) sidebarSubLogout.textContent = 'Cliquer pour se connecter';
+        if (topbarUserBtn) topbarUserBtn.textContent  = '?';
     }
 }
 
@@ -1596,7 +1573,7 @@ function updateAmountInfo() {
     const info     = document.getElementById('amount-info');
     const infoText = document.getElementById('amount-info-text');
     if (!info || !infoText) return;
-    info.style.display = 'block';
+    showElement(info);
     infoText.textContent = `${amount} EUR = ${cryptoAmount} ${crypto}`;
 }
 
@@ -1615,10 +1592,10 @@ function updateCreateInfo() {
     const summary = document.getElementById('create-summary');
     if (!info || !summary) return;
 
-    info.style.display = 'block';
+    showElement(info);
     document.getElementById('create-info-text').textContent = `Vous enverrez: ${cryptoAmount} ${crypto}`;
 
-    summary.style.display = 'block';
+    showElement(summary);
     document.getElementById('create-summary-content').innerHTML = `
         <div>Total: ${amount}€ en ${crypto}</div>
         <div>Commission (5%): ${commission}€ → Vous</div>
@@ -1842,9 +1819,9 @@ async function showEscrowDetail(escrowId) {
     const detailAmountEl = document.getElementById('detail-amount');
     if (isInitiator && !isContractValidationOrLater) {
         detailAmountEl.innerHTML = `
-            <div style="display:flex; gap:0.4rem; align-items:center; justify-content:flex-end;">
-                <input id="detail-amount-input" type="number" min="0.01" step="0.01" value="${Number(escrow.amount || 0).toFixed(2)}" style="max-width:130px; text-align:right;">
-                <button type="button" class="button secondary" onclick="saveInitiatorAmount(${escrow.id})" style="max-width:120px; padding:0.35rem 0.6rem;">Enregistrer</button>
+            <div class="detail-amount-edit-row">
+                <input id="detail-amount-input" class="detail-amount-input" type="number" min="0.01" step="0.01" value="${Number(escrow.amount || 0).toFixed(2)}">
+                <button type="button" class="button secondary detail-amount-save-btn" onclick="saveInitiatorAmount(${escrow.id})">Enregistrer</button>
             </div>
         `;
     } else {
@@ -1938,35 +1915,35 @@ async function showEscrowDetail(escrowId) {
     const sellerBlockEl = document.getElementById('detail-seller-block');
     if (sellerBlockEl) {
         sellerBlockEl.innerHTML = `
-            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerWallet(${escrow.id})" style="max-width:220px; margin-bottom:0.6rem;">🔌 Connect MetaMask</button>` : ''}
-            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerSolanaWalletConnected ? 'secondary' : 'success'}" type="button" onclick="connectSellerPhantomWallet(${escrow.id})" style="max-width:280px; margin-bottom:0.6rem;">👻 Connect Phantom (Solana)</button>` : ''}
-            <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.35rem;">
-                <label style="font-size:0.82rem;">Wallet EVM</label>
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerWalletConnected ? 'secondary' : 'success'} seller-wallet-btn">🔌 Connect MetaMask</button>` : ''}
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerSolanaWalletConnected ? 'secondary' : 'success'} seller-phantom-btn">👻 Connect Phantom (Solana)</button>` : ''}
+            <div class="form-group seller-wallet-group-evm">
+                <label class="seller-wallet-label">Wallet EVM</label>
                 <div class="input-with-icon">
                     <input id="detail-wallet-evm-input" type="text" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="0x..." value="${escapeHtml(sellerEvmWalletValue)}">
                     ${isSellerUser && !isContractValidationOrLater ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'evm')" title="Coller l'ID wallet EVM">📋</button>` : ''}
                 </div>
             </div>
-            <div class="form-group" style="margin-top:0.25rem; margin-bottom:0.5rem;">
-                <label style="font-size:0.82rem;">Wallet Phantom (Solana)</label>
+            <div class="form-group seller-wallet-group-phantom">
+                <label class="seller-wallet-label">Wallet Phantom (Solana)</label>
                 <div class="input-with-icon">
                     <input id="detail-wallet-phantom-input" type="text" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Adresse Solana..." value="${escapeHtml(sellerPhantomWalletValue)}">
                     ${isSellerUser && !isContractValidationOrLater ? `<button type="button" class="icon-button" onclick="pasteSellerWalletId(${escrow.id}, 'phantom')" title="Coller l'ID wallet Phantom">📋</button>` : ''}
                 </div>
             </div>
-            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.walletIdsSaved ? 'secondary' : 'success'}" type="button" onclick="saveSellerWalletIds(${escrow.id})" style="max-width:250px; margin-bottom:0.6rem;">Enregistrer IDs portefeuille</button>` : ''}
-            <div class="card-title" style="margin-top:0.7rem;">Engagement vendeur</div>
-            <textarea id="detail-engagement-seller-input" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement..." style="min-height:110px;">${escapeHtml(engagementSellerValue)}</textarea>
-            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerEngagementSaved ? 'secondary' : 'success'}" type="button" onclick="saveEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.walletIdsSaved ? 'secondary' : 'success'} seller-wallet-save-btn" type="button" onclick="saveSellerWalletIds(${escrow.id})">Enregistrer IDs portefeuille</button>` : ''}
+            <div class="card-title seller-engagement-title">Engagement vendeur</div>
+            <textarea id="detail-engagement-seller-input" class="engagement-textarea" ${(isSellerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement...">${escapeHtml(engagementSellerValue)}</textarea>
+            ${isSellerUser && !isContractValidationOrLater ? `<button class="button ${escrow.sellerEngagementSaved ? 'secondary' : 'success'} engagement-save-btn" type="button" onclick="saveEngagementText(${escrow.id})">Enregistrer</button>` : ''}
         `;
     }
 
     const buyerBlockEl = document.getElementById('detail-buyer-block');
     if (buyerBlockEl) {
         buyerBlockEl.innerHTML = `
-            <div class="card-title" style="margin-top:0.2rem;">Engagement acheteur</div>
-            <textarea id="detail-engagement-buyer-input" ${(isBuyerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement acheteur..." style="min-height:110px;">${escapeHtml(engagementBuyerValue)}</textarea>
-            ${isBuyerUser && !isContractValidationOrLater ? `<button class="button ${escrow.buyerEngagementSaved ? 'secondary' : 'success'}" type="button" onclick="saveBuyerEngagementText(${escrow.id})" style="max-width:170px; margin-top:0.55rem;">Enregistrer</button>` : ''}
+            <div class="card-title buyer-engagement-title">Engagement acheteur</div>
+            <textarea id="detail-engagement-buyer-input" class="engagement-textarea" ${(isBuyerUser && !isContractValidationOrLater) ? '' : 'readonly'} placeholder="Saisir un engagement acheteur...">${escapeHtml(engagementBuyerValue)}</textarea>
+            ${isBuyerUser && !isContractValidationOrLater ? `<button class="button ${escrow.buyerEngagementSaved ? 'secondary' : 'success'} engagement-save-btn" type="button" onclick="saveBuyerEngagementText(${escrow.id})">Enregistrer</button>` : ''}
         `;
     }
 
@@ -1983,7 +1960,7 @@ async function showEscrowDetail(escrowId) {
         const sellerActionEnabled = !!isSellerUser;
 
         actionsHtml += `
-            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">🧭 Actions de configuration</div>
+            <div class="card-title mt-02 mb-065">🧭 Actions de configuration</div>
             <div class="config-checklist">
                 <div class="config-checklist-item">
                     <button type="button" class="inline-link-button" onclick="scrollToDetailBlock('detail-buyer-block')" ${buyerActionEnabled ? '' : 'disabled'}>Acheteur : Remplir les engagements</button>
@@ -2009,8 +1986,8 @@ async function showEscrowDetail(escrowId) {
         const canValidateSeller = isSellerUser && !sellerValidated;
 
         actionsHtml += `
-            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">📋 Contrat à valider</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+            <div class="card-title mt-02 mb-065">📋 Contrat à valider</div>
+            <div class="two-col-grid-06">
                 <button class="button ${buyerValidated ? 'secondary' : 'success'}" type="button" onclick="validateContractByRole(${escrow.id}, 'buyer')" ${canValidateBuyer ? '' : 'disabled'}>
                     ${buyerValidated ? '✅ Validé Acheteur' : 'Valider Acheteur'}
                 </button>
@@ -2018,7 +1995,7 @@ async function showEscrowDetail(escrowId) {
                     ${sellerValidated ? '✅ Validé Vendeur' : 'Valider Vendeur'}
                 </button>
             </div>
-            <div class="alert alert-info" style="margin-top:0.7rem; margin-bottom:0.7rem;">
+            <div class="alert alert-info my-07">
                 ℹ️ La validation verrouille les blocs vendeur/acheteur et la modification du montant.
             </div>
             <div class="divider"></div>
@@ -2033,8 +2010,8 @@ async function showEscrowDetail(escrowId) {
         const hashProof = String(escrow.signedContractHash || '').trim();
 
         actionsHtml += `
-            <div class="card-title" style="margin-top:0.2rem; margin-bottom:0.65rem;">✍️ Signer le contrat</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
+            <div class="card-title mt-02 mb-065">✍️ Signer le contrat</div>
+            <div class="two-col-grid-06">
                 <button class="button ${buyerSigned ? 'secondary' : 'success'}" type="button" onclick="openContractSignaturePad(${escrow.id}, 'buyer')" ${canSignBuyer ? '' : 'disabled'}>
                     ${buyerSigned ? '✅ Signé Acheteur' : 'Signer Acheteur'}
                 </button>
@@ -2042,7 +2019,7 @@ async function showEscrowDetail(escrowId) {
                     ${sellerSigned ? '✅ Signé Vendeur' : 'Signer Vendeur'}
                 </button>
             </div>
-            ${hashProof ? `<div class="alert alert-success" style="margin-top:0.7rem; margin-bottom:0.7rem;">✅ Hash de preuve blockchain: ${escapeHtml(hashProof)}</div>` : `<div class="alert alert-info" style="margin-top:0.7rem; margin-bottom:0.7rem;">ℹ️ Les deux signatures génèrent automatiquement le PDF signé et le hash de preuve blockchain.</div>`}
+            ${hashProof ? `<div class="alert alert-success my-07">✅ Hash de preuve blockchain: ${escapeHtml(hashProof)}</div>` : `<div class="alert alert-info my-07">ℹ️ Les deux signatures génèrent automatiquement le PDF signé et le hash de preuve blockchain.</div>`}
             <div class="divider"></div>
         `;
     }
@@ -2050,7 +2027,7 @@ async function showEscrowDetail(escrowId) {
     if (escrow.status === 'En attente' && !isInitiator) {
         actionsHtml = `
             <div class="alert alert-info">ℹ️ Vous n'êtes pas l'initiateur. Acceptez ou refusez cette transaction.</div>
-            <button class="button success" onclick="acceptTransaction(${escrow.id})" style="margin-bottom: 0.5rem;">✅ Accepter</button>
+            <button class="button success mb-05" onclick="acceptTransaction(${escrow.id})">✅ Accepter</button>
             <button class="button danger" onclick="refuseTransaction(${escrow.id})">❌ Refuser</button>
         `;
     } else if (escrow.status === 'En attente' && isInitiator) {
@@ -2060,7 +2037,7 @@ async function showEscrowDetail(escrowId) {
     if (escrow.status === 'LOCKED' && escrow.buyer === AppData.currentUser.name) {
         actionsHtml = `
             <div class="alert alert-info">ℹ️ Vous êtes l'acheteur. Confirmez la livraison ou ouvrez un litige.</div>
-            <button class="button success" onclick="confirmDelivery(${escrow.id})" style="margin-bottom: 0.5rem;">✅ Confirmer Livraison</button>
+            <button class="button success mb-05" onclick="confirmDelivery(${escrow.id})">✅ Confirmer Livraison</button>
             <button class="button danger"  onclick="openDispute(${escrow.id})">⚠️ Ouvrir Litige</button>
         `;
     } else if (escrow.status === 'LOCKED' && escrow.seller === AppData.currentUser.name) {
@@ -2069,7 +2046,7 @@ async function showEscrowDetail(escrowId) {
     if (escrow.status === 'En attente') {
         actionsHtml += `
             <div class="divider"></div>
-            <div class="form-group" style="margin-top:0.5rem;">
+            <div class="form-group mt-05">
                 <label>Lien partageable</label>
                 <div class="input-with-icon">
                     <input type="text" readonly value="${buildTransactionShareUrl(escrow)}">
@@ -2396,36 +2373,25 @@ async function openContractSignaturePad(escrowId, role) {
     }
 
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(2,6,23,0.7)';
-    overlay.style.zIndex = '99999';
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'center';
-    overlay.style.alignItems = 'center';
-    overlay.style.padding = '1rem';
+    overlay.className = 'signature-overlay';
 
     const box = document.createElement('div');
-    box.style.width = 'min(760px, 98vw)';
-    box.style.background = '#0F172A';
-    box.style.border = '1px solid rgba(148,163,184,0.35)';
-    box.style.borderRadius = '12px';
-    box.style.padding = '1rem';
+    box.className = 'signature-modal';
 
     const signerLabel = role === 'buyer' ? 'Acheteur' : 'Vendeur';
 
     box.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.6rem; margin-bottom:0.8rem;">
-            <div style="font-size:1rem; font-weight:700; color:#E2E8F0;">Signature contrat — ${signerLabel}</div>
-            <button type="button" class="button secondary" id="sign-close" style="max-width:110px; padding:0.4rem 0.55rem;">Fermer</button>
+        <div class="signature-header">
+            <div class="signature-title">Signature contrat — ${signerLabel}</div>
+            <button type="button" class="button secondary signature-close-btn" id="sign-close">Fermer</button>
         </div>
-        <div class="alert alert-info" style="margin-bottom:0.6rem;">ℹ️ Dessinez votre signature puis cliquez sur Signer.</div>
-        <canvas id="sign-canvas" width="680" height="220" style="width:100%; border:1px solid rgba(148,163,184,0.35); border-radius:8px; background:#fff;"></canvas>
-        <div style="display:flex; gap:0.55rem; margin-top:0.7rem; justify-content:flex-end;">
-            <button type="button" class="button secondary" id="sign-clear" style="max-width:130px;">Effacer</button>
-            <button type="button" class="button success" id="sign-submit" style="max-width:180px;">Signer</button>
+        <div class="alert alert-info mb-06">ℹ️ Dessinez votre signature puis cliquez sur Signer.</div>
+        <canvas id="sign-canvas" class="signature-canvas" width="680" height="220"></canvas>
+        <div class="signature-actions">
+            <button type="button" class="button secondary signature-clear-btn" id="sign-clear">Effacer</button>
+            <button type="button" class="button success signature-submit-btn" id="sign-submit">Signer</button>
         </div>
-        <div id="sign-status" class="seller-status" style="display:none; margin-top:0.6rem;"></div>
+        <div id="sign-status" class="seller-status mt-06 hidden"></div>
     `;
 
     const close = () => {
@@ -2485,7 +2451,7 @@ async function openContractSignaturePad(escrowId, role) {
 
     const statusEl = box.querySelector('#sign-status');
     const setStatus = (kind, message) => {
-        statusEl.style.display = 'flex';
+        showElement(statusEl);
         statusEl.className = `seller-status ${kind}`;
         statusEl.textContent = message;
     };
@@ -2494,7 +2460,7 @@ async function openContractSignaturePad(escrowId, role) {
     box.querySelector('#sign-clear')?.addEventListener('click', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         hasStroke = false;
-        statusEl.style.display = 'none';
+        hideElement(statusEl);
     });
 
     box.querySelector('#sign-submit')?.addEventListener('click', async () => {
@@ -2783,9 +2749,43 @@ function updateDashboard() {
     el('stat-disputes').textContent     = disputed;
     el('stat-success').textContent      = success + '%';
 
-    const recentHtml = AppData.escrows.slice(-5).reverse().map(e => _escrowItemHtml(e)).join('');
-    el('recent-escrows').innerHTML =
-        recentHtml || '<p style="color: #94A3B8;">Aucune transaction pour le moment</p>';
+    const recentHtml = AppData.escrows.slice(-5).reverse().map(e => _escrowRowHtml(e)).join('');
+    const recentEl = document.getElementById('recent-escrows');
+    if (recentEl) {
+        // index.html uses a table tbody
+        recentEl.innerHTML = recentHtml || '<tr><td colspan="6" class="p-15 text-muted">Aucune transaction pour le moment</td></tr>';
+    }
+
+    // Update sidebar badge
+    const badge = document.getElementById('sidebar-badge-deals');
+    if (badge) badge.textContent = AppData.escrows.length;
+
+    // Update dashboard summary
+    const summaryEl = document.getElementById('dashboard-summary');
+    if (summaryEl) {
+        const inDispute = AppData.escrows.filter(e => e.status === 'DISPUTE').length;
+        const locked    = AppData.escrows.filter(e => e.status === 'LOCKED').length;
+        summaryEl.textContent = `${AppData.escrows.length} deals au total · ${inDispute} en litige · ${locked} fonds bloqués`;
+    }
+
+    // Update tab counts
+    _updateTabCounts();
+}
+
+function _updateTabCounts() {
+    const counts = {
+        all: AppData.escrows.length,
+        pending: AppData.escrows.filter(e => ['En attente','Contrat en attente','Dépôt en attente'].includes(e.status)).length,
+        locked:  AppData.escrows.filter(e => e.status === 'LOCKED').length,
+        dispute: AppData.escrows.filter(e => e.status === 'DISPUTE').length,
+        completed: AppData.escrows.filter(e => e.status === 'RELEASED').length,
+        refunded:  AppData.escrows.filter(e => e.status === 'REFUNDED').length,
+    };
+    for (const [key, val] of Object.entries(counts)) {
+        const el = document.getElementById(`tab-count-${key}`);
+        if (el) el.textContent = val;
+    }
+}
 }
 
 // ============ ESCROW LIST ============
@@ -2800,45 +2800,81 @@ function displayEscrows() {
     });
 
     const html = AppData.escrows.length === 0
-        ? '<p style="color: #94A3B8; padding: 1.5rem;">Aucune transaction</p>'
-        : sortedEscrows.map(e => _escrowItemHtml(e)).join('');
+        ? '<tr><td colspan="6" class="p-15 text-muted">Aucune transaction</td></tr>'
+        : sortedEscrows.map(e => _escrowRowHtml(e)).join('');
 
     listEl.innerHTML = html;
+
+    // Update sidebar badge
+    const badge = document.getElementById('sidebar-badge-deals');
+    if (badge) badge.textContent = AppData.escrows.length;
+
+    _updateTabCounts();
 }
 
-/** Builds a single escrow list-item HTML string. */
-function _escrowItemHtml(e) {
-    const cryptoAmount = (e.amount / cryptoPrices[e.crypto]).toFixed(3);
-    const title = (e.title && String(e.title).trim()) ? e.title : (e.description || 'Transaction multi-crypto');
+// Global filter hook called by filter tabs
+window.applyDealFilter = function(filter) {
+    const listEl = document.getElementById('escrows-list');
+    if (!listEl) return;
+    const filtered = filter === 'all' ? AppData.escrows : AppData.escrows.filter(e => {
+        if (filter === 'pending')   return ['En attente','Contrat en attente','Dépôt en attente'].includes(e.status);
+        if (filter === 'locked')    return e.status === 'LOCKED';
+        if (filter === 'dispute')   return e.status === 'DISPUTE';
+        if (filter === 'completed') return e.status === 'RELEASED';
+        if (filter === 'refunded')  return e.status === 'REFUNDED';
+        return true;
+    });
+    listEl.innerHTML = filtered.length === 0
+        ? '<tr><td colspan="6" class="p-15 text-muted">Aucun deal dans cette catégorie</td></tr>'
+        : filtered.map(e => _escrowRowHtml(e)).join('');
+};
+
+/** Builds a single escrow table-row HTML string for the deals-table. */
+function _escrowRowHtml(e) {
+    const title = (e.title && String(e.title).trim()) ? e.title : (e.description || 'Transaction');
     const createdTs = Number(e.datecreation) || 0;
     const createdLe = createdTs ? new Date(createdTs).toLocaleDateString('fr-FR') : '-';
+    const isMyRole   = AppData.currentUser;
+    const role       = (isMyRole && e.buyerIdLogin === AppData.currentUser?.uid) ? 'acheteur' : 'vendeur';
+    const party      = role === 'acheteur' ? e.seller : e.buyer;
+    const partyInitials = party ? party.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2) : '?';
+    const amountFmt  = e.amount ? e.amount.toLocaleString('fr-FR', {minimumFractionDigits:2}) + ' €' : '—';
+
     const statusMap = {
-        LOCKED:   { cls: 'status-locked',   text: '🔒 LOCKED' },
-        RELEASED: { cls: 'status-released', text: '✅ LIBÉRÉ' },
-        DISPUTE:  { cls: 'status-dispute',  text: '⚠️ DISPUTE' },
-        'Accepté': { cls: 'status-released', text: '✅ ACCEPTÉ' },
-        'Refusé':  { cls: 'status-dispute',  text: '❌ REFUSÉ' },
-        'En attente': { cls: 'status-pending', text: '⏱️ EN ATTENTE' }
+        'LOCKED':            { cls: 'chip chip-escrow',  text: 'En garantie' },
+        'RELEASED':          { cls: 'chip chip-succes',  text: 'Complété' },
+        'DISPUTE':           { cls: 'chip chip-litige',  text: 'Litige ouvert' },
+        'REFUNDED':          { cls: 'chip chip-neutre',  text: 'Remboursé' },
+        'En attente':        { cls: 'chip chip-attente', text: 'En attente' },
+        'Contrat en attente':{ cls: 'chip chip-attente', text: 'Contrat en attente' },
+        'Dépôt en attente':  { cls: 'chip chip-attente', text: 'Dépôt en attente' },
     };
-    const { cls, text } = statusMap[e.status] || { cls: 'status-pending', text: '⏱️ EN ATTENTE' };
+    const { cls, text } = statusMap[e.status] || { cls: 'chip chip-attente', text: e.status || '—' };
 
     return `
-        <div class="item" onclick="showEscrowDetail(${e.id})">
-            <div class="item-header">
-                <div>
-                    <div class="item-title">${title}</div>
-                    <div style="color:#94A3B8; font-size:0.85rem; margin-top:0.2rem;">${cryptoAmount} ${e.crypto} = ${e.amount}€</div>
+        <tr onclick="showEscrowDetail(${e.id})">
+            <td><span class="deals-table-ref">${e.ref || ('DL-' + String(e.id).padStart(4,'0'))}</span></td>
+            <td>
+                <div class="deals-table-deal-name">${title}</div>
+                <div class="deals-table-deal-sub">Vous êtes ${role} · créé le ${createdLe}</div>
+            </td>
+            <td>
+                <div class="deals-table-party">
+                    <div class="deals-table-party-avatar">${partyInitials}</div>
+                    <span>${party || '—'}</span>
                 </div>
-                <div class="status-badge ${cls}">${text}</div>
-            </div>
-            <div class="item-meta">
-                <span>De: ${e.buyer}</span>
-                <span>À: ${e.seller}</span>
-                <span>Créée le: ${createdLe}</span>
-            </div>
-        </div>
+            </td>
+            <td class="deals-table-amount">
+                <div class="deals-table-amount-value">${amountFmt}</div>
+            </td>
+            <td><span class="${cls}">${text}</span></td>
+            <td class="deals-table-chevron">›</td>
+        </tr>
     `;
 }
+
+/** @deprecated use _escrowRowHtml */
+function _escrowItemHtml(e) { return _escrowRowHtml(e); }
 
 // ============ ADMIN PANEL ============
 function updateAdmin() {
@@ -2869,7 +2905,7 @@ function updateAdmin() {
     // Open disputes
     const openDisputes = AppData.disputes.filter(d => d.status === 'OPEN');
     el('admin-disputes').innerHTML = openDisputes.length === 0
-        ? '<p style="color: #94A3B8;">Aucun litige actuellement</p>'
+        ? '<p class="text-muted">Aucun litige actuellement</p>'
         : openDisputes.map(d => `
             <div class="item">
                 <div class="item-header">
@@ -2880,7 +2916,7 @@ function updateAdmin() {
                     <span>Ouvert par: ${d.opener}</span>
                     <span>Raison: ${d.reason}</span>
                 </div>
-                <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div class="two-col-grid-05 mt-10">
                     <button class="button secondary" onclick="resolveDispute(${d.escrowId}, 'REFUND')">💰 Rembourser</button>
                     <button class="button secondary" onclick="resolveDispute(${d.escrowId}, 'RELEASE')">✅ Libérer</button>
                 </div>
@@ -2889,7 +2925,7 @@ function updateAdmin() {
 
     // All deals
     el('admin-all-deals').innerHTML = AppData.escrows.length === 0
-        ? '<p style="color: #94A3B8;">Aucun deal n\'a été créé</p>'
+        ? '<p class="text-muted">Aucun deal n\'a été créé</p>'
         : AppData.escrows.map(e => {
             const comm = (e.amount * 0.05).toFixed(2);
             const badgeMap = { LOCKED: 'status-locked', RELEASED: 'status-released', DISPUTE: 'status-dispute' };

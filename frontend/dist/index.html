@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OFM Transaction Pro - Plateforme d'échanges Multi-Crypto Sécurisée</title>
+    <title>Actuarus - Plateforme d'échanges Multi-Crypto Sécurisée</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,19 +13,21 @@
      ============================================================ -->
 <nav>
     <div class="nav-container">
-        <div class="logo">OFM Transaction Pro</div>
+        <div class="logo">Actuarus</div>
         <ul class="nav-links">
             <li><a href="index.html"        class="nav-link active" data-tab="dashboard">📊 Dashboard</a></li>
             <li><a href="transactions.html" class="nav-link"        data-tab="escrows">📝 Mes Transactions</a></li>
             <li><a href="create.html"       class="nav-link"        data-tab="create">🚀 Créer</a></li>
-            <li><a href="admin.html"        class="nav-link"        data-tab="admin">👨‍⚖️ Admin</a></li>
             <!-- login / logout links controlled by JS -->
-            <li id="nav-login"  style="display:none;"><a href="login.html">🔐 Connexion</a></li>
+            <li id="nav-login"  style="display:block;"><a href="login.html">🔐 Connexion</a></li>
             <li id="nav-logout" style="display:none;"><a onclick="logout()">🚪 Déconnexion</a></li>
         </ul>
         <div class="user-profile" style="display:none;">
             <div class="user-avatar" id="userAvatar"></div>
-            <div id="userName"></div>
+            <div class="user-meta">
+                <div id="userName"></div>
+                <div id="userEmail" class="user-secondary"></div>
+            </div>
         </div>
     </div>
 </nav>
@@ -87,12 +89,12 @@
             <div class="card">
                 <div class="card-title">📊 Statistiques Clés</div>
                 <div style="color: #94A3B8; font-size: 0.9rem; line-height: 2;">
-                    <div><strong style="color:#E2E8F0;">Commission:</strong> 5%</div>
-                    <div><strong style="color:#E2E8F0;">Réseau:</strong> Polygon L2</div>
-                    <div><strong style="color:#E2E8F0;">Frais Gas:</strong> Très bas (&lt;1€)</div>
-                    <div><strong style="color:#E2E8F0;">Vitesse:</strong> 5–10 minutes</div>
-                    <div style="margin-top:1rem;"><strong style="color:#E2E8F0;">Support Crypto:</strong></div>
-                    <div>🪙 BTC • ETH • SOL • USDT • USDC • MATIC • TON</div>
+                    <div><strong style="color:#E2E8F0;">Commission:</strong> <span id="key-commission">—</span></div>
+                    <div><strong style="color:#E2E8F0;">Réseau dominant:</strong> <span id="key-network">—</span></div>
+                    <div><strong style="color:#E2E8F0;">Plateforme dominante:</strong> <span id="key-platform">—</span></div>
+                    <div><strong style="color:#E2E8F0;">Litiges actifs:</strong> <span id="key-open-disputes">—</span></div>
+                    <div style="margin-top:1rem;"><strong style="color:#E2E8F0;">Cryptos observées:</strong></div>
+                    <div id="key-crypto-list">—</div>
                 </div>
             </div>
         </div><!-- /.content-grid -->
@@ -130,6 +132,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
+<script src="solana-escrow.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
+

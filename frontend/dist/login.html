@@ -3,268 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - OFM Transaction Pro</title>
+    <title>Connexion – Actuarus</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
-    <style>
-        .login-page {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem 1rem;
-        }
-
-        .login-logo {
-            font-size: 1.6rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.25rem;
-            text-align: center;
-        }
-
-        .login-tagline {
-            color: #64748B;
-            font-size: 0.85rem;
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .login-card {
-            width: 100%;
-            max-width: 420px;
-            background: linear-gradient(135deg, rgba(30,41,59,0.95), rgba(15,23,42,0.95));
-            border: 1px solid rgba(71, 85, 105, 0.4);
-            border-radius: 16px;
-            padding: 2rem;
-            box-shadow: 0 24px 48px rgba(0,0,0,0.4);
-        }
-
-        /* ---- Profile Preview ---- */
-        .profile-preview {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(71, 85, 105, 0.3);
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
-            margin-bottom: 1.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .profile-preview-label {
-            font-size: 0.7rem;
-            color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 0.6rem;
-        }
-
-        .preview-avatar {
-            width: 42px;
-            height: 42px;
-            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1rem;
-            color: #fff;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
-            letter-spacing: 0.05em;
-        }
-
-        .preview-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .preview-name {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #E2E8F0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            transition: all 0.2s;
-        }
-
-        .preview-role {
-            font-size: 0.75rem;
-            color: #3B82F6;
-            margin-top: 0.1rem;
-        }
-
-        .preview-badge {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.55rem;
-            background: rgba(59,130,246,0.15);
-            border: 1px solid rgba(59,130,246,0.3);
-            border-radius: 20px;
-            color: #60A5FA;
-            white-space: nowrap;
-        }
-
-        /* ---- Tabs ---- */
-        .login-tabs {
-            display: flex;
-            gap: 0;
-            margin-bottom: 1.5rem;
-            border-radius: 8px;
-            overflow: hidden;
-            background: rgba(15,23,42,0.6);
-            border: 1px solid rgba(71,85,105,0.3);
-        }
-
-        .login-tab {
-            flex: 1;
-            padding: 0.6rem;
-            text-align: center;
-            cursor: pointer;
-            font-size: 0.85rem;
-            color: #64748B;
-            transition: all 0.2s;
-            border: none;
-            background: transparent;
-        }
-
-        .login-tab.active {
-            background: linear-gradient(135deg, #3B82F6, #6366F1);
-            color: #fff;
-            font-weight: 600;
-        }
-
-        /* ---- Form ---- */
-        .login-card .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .login-card .form-group label {
-            display: block;
-            font-size: 0.8rem;
-            color: #94A3B8;
-            margin-bottom: 0.35rem;
-            font-weight: 500;
-        }
-
-        .login-card .form-group input {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(71, 85, 105, 0.4);
-            border-radius: 8px;
-            padding: 0.65rem 0.75rem;
-            color: #E2E8F0;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .login-card .form-group input:focus {
-            border-color: #3B82F6;
-            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
-        }
-
-        .login-card .form-group input::placeholder {
-            color: #475569;
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 0.75rem;
-            background: linear-gradient(135deg, #3B82F6, #6366F1);
-            border: none;
-            border-radius: 8px;
-            color: #fff;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s, transform 0.1s;
-            margin-top: 0.5rem;
-        }
-
-        .btn-login:hover { opacity: 0.9; }
-        .btn-login:active { transform: scale(0.99); }
-
-        .login-footer-links {
-            display: flex;
-            justify-content: center;
-            margin-top: 1rem;
-            font-size: 0.8rem;
-            color: #475569;
-        }
-
-        .login-footer-links a {
-            color: #60A5FA;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .login-footer-links a:hover { color: #93C5FD; }
-
-        .alert-msg {
-            padding: 0.6rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
-
-        .alert-msg.error {
-            background: rgba(239,68,68,0.12);
-            border: 1px solid rgba(239,68,68,0.3);
-            color: #FCA5A5;
-            display: block;
-        }
-
-        .alert-msg.success {
-            background: rgba(16,185,129,0.12);
-            border: 1px solid rgba(16,185,129,0.3);
-            color: #6EE7B7;
-            display: block;
-        }
-
-        /* ---- Name field conditional ---- */
-        .field-name { transition: all 0.2s; }
-
-        /* ---- Divider ---- */
-        .login-divider {
-            text-align: center;
-            color: #334155;
-            font-size: 0.75rem;
-            margin: 1.25rem 0;
-            position: relative;
-        }
-        .login-divider::before, .login-divider::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            width: 42%;
-            height: 1px;
-            background: rgba(71,85,105,0.35);
-        }
-        .login-divider::before { left: 0; }
-        .login-divider::after { right: 0; }
-    </style>
 </head>
 <body>
 
 <div class="login-page">
-    <!-- Logo -->
-    <div class="login-logo">OFM Transaction Pro</div>
-    <p class="login-tagline">Plateforme d'échanges Multi-Crypto Sécurisée</p>
 
+    <!-- Logo Actuarus -->
+    <div class="invite-logo-row">
+        <img src="logo.jpeg" alt="Actuarus">
+        <span class="invite-logo-text">Actuarus</span>
+    </div>
+
+    <!-- Carte de connexion -->
     <div class="login-card">
 
-        <!-- Apercu profil utilisateur -->
+        <!-- Aperçu profil -->
         <p class="profile-preview-label">Votre profil dans la barre de navigation</p>
         <div class="profile-preview" id="profilePreview">
             <div class="preview-avatar" id="previewAvatar">?</div>
@@ -284,24 +43,24 @@
         <!-- Message d'alerte -->
         <div class="alert-msg" id="alertMsg"></div>
 
-        <!-- Champ nom (inscription uniquement) -->
-        <div class="form-group field-name" id="fieldName" style="display:none;">
+        <!-- Champs inscription -->
+        <div class="form-group field-name hidden" id="fieldName">
             <label for="login-name">Nom complet</label>
             <input type="text" id="login-name" placeholder="Ex : Jean Dupont" oninput="updatePreview()" autocomplete="name">
         </div>
 
-        <div class="form-group field-name" id="fieldHandle" style="display:none;">
+        <div class="form-group field-name hidden" id="fieldHandle">
             <label for="login-handle">Handle</label>
             <input type="text" id="login-handle" placeholder="Ex : pierre110" autocomplete="username" oninput="normalizeHandleInput()">
         </div>
 
-        <div class="form-group field-name" id="fieldReferral" style="display:none;">
+        <div class="form-group field-name hidden" id="fieldReferral">
             <label for="login-referral">Code parrain (handle existant)</label>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
+            <div class="login-referral-row">
                 <input type="text" id="login-referral" placeholder="Ex : pierre110" autocomplete="off" oninput="normalizeReferralInput(); clearReferralStatus();" onblur="verifyReferralHandle(false)">
-                <button type="button" class="login-tab" style="max-width:110px; border-radius:8px; border:1px solid rgba(71,85,105,0.35);" onclick="verifyReferralHandle(true)">Vérifier</button>
+                <button type="button" class="login-tab login-referral-verify" onclick="verifyReferralHandle(true)">Vérifier</button>
             </div>
-            <div id="referral-status" class="seller-status" style="display:none; margin-top:0.5rem;"></div>
+            <div id="referral-status" class="seller-status login-referral-status hidden"></div>
         </div>
 
         <!-- Email -->
@@ -343,6 +102,16 @@
         : 'http://localhost:3001';
     const DEFAULT_REFERRAL_HANDLE = 'actarus';
 
+    function showElement(element) {
+        if (!element) return;
+        element.classList.remove('hidden');
+    }
+
+    function hideElement(element) {
+        if (!element) return;
+        element.classList.add('hidden');
+    }
+
     let isCreatingAccount = false;
 
     // Redirect if already logged in
@@ -357,9 +126,19 @@
         currentMode = mode;
         document.getElementById('tab-login').classList.toggle('active', mode === 'login');
         document.getElementById('tab-register').classList.toggle('active', mode === 'register');
-        document.getElementById('fieldName').style.display = mode === 'register' ? 'block' : 'none';
-        document.getElementById('fieldHandle').style.display = mode === 'register' ? 'block' : 'none';
-        document.getElementById('fieldReferral').style.display = mode === 'register' ? 'block' : 'none';
+        const showRegisterFields = mode === 'register';
+        const fieldName = document.getElementById('fieldName');
+        const fieldHandle = document.getElementById('fieldHandle');
+        const fieldReferral = document.getElementById('fieldReferral');
+        if (showRegisterFields) {
+            showElement(fieldName);
+            showElement(fieldHandle);
+            showElement(fieldReferral);
+        } else {
+            hideElement(fieldName);
+            hideElement(fieldHandle);
+            hideElement(fieldReferral);
+        }
         document.getElementById('btnSubmit').textContent = mode === 'login' ? 'Se connecter' : 'Créer mon compte';
         document.getElementById('login-password').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
 
@@ -413,14 +192,14 @@
         const referralEl = document.getElementById('login-referral');
         if (!referralEl) return;
         const normalized = String(referralEl.value || '').trim().toLowerCase();
-        referralEl.style.color = normalized === DEFAULT_REFERRAL_HANDLE ? '#94A3B8' : '#E2E8F0';
+        referralEl.classList.toggle('is-default-referral', normalized === DEFAULT_REFERRAL_HANDLE);
     }
 
     function setReferralStatus(type, message) {
         const statusEl = document.getElementById('referral-status');
         if (!statusEl) return;
 
-        statusEl.style.display = 'flex';
+        showElement(statusEl);
         statusEl.className = `seller-status ${type}`;
         statusEl.textContent = message;
     }
@@ -428,8 +207,8 @@
     function clearReferralStatus() {
         const statusEl = document.getElementById('referral-status');
         if (!statusEl) return;
-        statusEl.style.display = 'none';
         statusEl.className = 'seller-status';
+        hideElement(statusEl);
         statusEl.textContent = '';
     }
 
@@ -474,60 +253,28 @@
     function showSelectablePopup(message) {
         const text = String(message || '');
         const overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.inset = '0';
-        overlay.style.background = 'rgba(2,6,23,0.65)';
-        overlay.style.zIndex = '99999';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.padding = '1rem';
+        overlay.className = 'selectable-popup-overlay';
 
         const box = document.createElement('div');
-        box.style.width = 'min(720px, 96vw)';
-        box.style.background = '#0F172A';
-        box.style.border = '1px solid rgba(148,163,184,0.35)';
-        box.style.borderRadius = '10px';
-        box.style.boxShadow = '0 14px 40px rgba(2,6,23,0.5)';
-        box.style.padding = '1rem';
+        box.className = 'selectable-popup-box';
 
         const isError = text.toLowerCase().includes('error') || text.toLowerCase().includes('permission') || text.toLowerCase().includes('unauthorized');
         const title = document.createElement('div');
         title.textContent = isError ? 'Erreur' : 'Information';
-        title.style.color = isError ? '#FCA5A5' : '#93C5FD';
-        title.style.fontWeight = '700';
-        title.style.marginBottom = '0.55rem';
+        title.className = `selectable-popup-title ${isError ? 'is-error' : 'is-info'}`;
 
         const textArea = document.createElement('textarea');
         textArea.readOnly = true;
         textArea.value = text;
-        textArea.style.width = '100%';
-        textArea.style.minHeight = '120px';
-        textArea.style.maxHeight = '48vh';
-        textArea.style.resize = 'vertical';
-        textArea.style.background = 'rgba(15,23,42,0.8)';
-        textArea.style.color = '#E2E8F0';
-        textArea.style.border = '1px solid rgba(148,163,184,0.35)';
-        textArea.style.borderRadius = '8px';
-        textArea.style.padding = '0.65rem';
-        textArea.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-        textArea.style.fontSize = '0.85rem';
+        textArea.className = 'selectable-popup-textarea';
 
         const actions = document.createElement('div');
-        actions.style.display = 'flex';
-        actions.style.justifyContent = 'flex-end';
-        actions.style.gap = '0.55rem';
-        actions.style.marginTop = '0.7rem';
+        actions.className = 'selectable-popup-actions';
 
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
         copyBtn.textContent = 'Copier';
-        copyBtn.style.background = '#1D4ED8';
-        copyBtn.style.color = '#fff';
-        copyBtn.style.border = 'none';
-        copyBtn.style.borderRadius = '6px';
-        copyBtn.style.padding = '0.45rem 0.8rem';
-        copyBtn.style.cursor = 'pointer';
+        copyBtn.className = 'selectable-popup-btn selectable-popup-btn-copy';
         copyBtn.onclick = async () => {
             try {
                 await navigator.clipboard.writeText(text);
@@ -542,12 +289,7 @@
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.textContent = 'OK';
-        closeBtn.style.background = '#2563EB';
-        closeBtn.style.color = '#fff';
-        closeBtn.style.border = 'none';
-        closeBtn.style.borderRadius = '6px';
-        closeBtn.style.padding = '0.45rem 0.8rem';
-        closeBtn.style.cursor = 'pointer';
+        closeBtn.className = 'selectable-popup-btn selectable-popup-btn-ok';
 
         const close = () => {
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);

@@ -8,6 +8,9 @@ backend/node_modules/
 *.key
 *.p12
 *serviceAccount*.json
+*firebase-adminsdk*.json
+backend/secrets/*.json
+!backend/secrets/*.example.json
 
 # Logs
 *.log

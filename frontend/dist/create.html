@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actuarus – Nouveau deal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="selectOverlay" class="select-overlay"></div>
+
+<div class="app-shell">
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside class="sidebar" id="sidebar">
+    <a href="index.html" class="sidebar-logo">
+        <img src="logo.jpeg" alt="Actuarus">
+        <span class="sidebar-logo-text">Actuarus</span>
+    </a>
+
+    <div class="sidebar-topbar">
+        <a href="create.html" class="sidebar-new-deal-btn">+ &nbsp;Nouveau deal</a>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a href="index.html" class="sidebar-nav-item" id="nav-deals">
+            <span class="nav-icon">☰</span>
+            Mes deals
+            <span class="sidebar-nav-badge" id="sidebar-badge-deals">0</span>
+        </a>
+        <a href="transactions.html" class="sidebar-nav-item" id="nav-messages">
+            <span class="nav-icon">💬</span>
+            Messages
+        </a>
+        <a href="transactions.html" class="sidebar-nav-item" id="nav-archives">
+            <span class="nav-icon">🗂</span>
+            Archives
+        </a>
+        <a href="admin/settings.html" class="sidebar-nav-item" id="nav-settings">
+            <span class="nav-icon">⚙</span>
+            Paramètres
+        </a>
+
+        <div class="sidebar-nav-section-label">Démos d'écrans</div>
+        <a href="login.html" class="sidebar-nav-item" id="nav-invite">
+            <span class="nav-icon">✉</span>
+            Invitation reçue
+        </a>
+        <a href="admin/index.html" class="sidebar-nav-item" id="nav-admin">
+            <span class="nav-icon">⚖</span>
+            Arbitrage (admin)
+        </a>
+        <a href="login.html" class="sidebar-nav-item hidden" id="nav-login">
+            <span class="nav-icon">🔐</span>
+            Connexion
+        </a>
+        <a href="#" class="sidebar-nav-item hidden" id="nav-logout" onclick="logout(); return false;">
+            <span class="nav-icon">🚪</span>
+            Déconnexion
+        </a>
+    </nav>
+
+    <a class="sidebar-profile" id="sidebarProfile" onclick="handleSidebarProfileClick()">
+        <div class="sidebar-profile-avatar" id="sidebarAvatar">?</div>
+        <div class="sidebar-profile-info">
+            <div class="sidebar-profile-name" id="sidebarName">Non connecté</div>
+            <div class="sidebar-profile-sub" id="sidebarSub">Cliquer pour se connecter</div>
+        </div>
+        <span class="sidebar-profile-chevron">›</span>
+    </a>
+</aside>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<main class="app-main">
+    <header class="app-topbar">
+        <button class="app-topbar-hamburger" id="topbarHamburger" onclick="toggleSidebar()">☰</button>
+        <div class="app-topbar-search">
+            <input type="search" placeholder="Rechercher un deal, une contrepartie, une référence…" id="topbarSearch">
+        </div>
+        <div class="app-topbar-spacer"></div>
+        <div class="app-topbar-actions">
+            <button class="app-topbar-icon-btn" title="Mode sombre">🌙</button>
+            <button class="app-topbar-icon-btn" title="Notifications" id="topbarNotif">
+                🔔
+                <span class="app-topbar-notif-dot hidden" id="notifDot"></span>
+            </button>
+            <button class="app-topbar-user-btn" id="topbarUserBtn" onclick="handleSidebarProfileClick()"></button>
+        </div>
+    </header>
+
+    <div class="app-content">
+
+        <!-- ============================================================
+             CRÉER UN NOUVEAU DEAL (maquette 04)
+             ============================================================ -->
+        <div id="create" class="tab-content active">
+
+            <button class="deal-detail-back" onclick="window.location.href='index.html'">← Annuler</button>
+
+            <div class="page-eyebrow">Nouveau deal</div>
+            <h1 class="page-title">Créer une transaction sécurisée</h1>
+
+            <!-- Stepper 4 étapes -->
+            <div class="create-stepper">
+                <div class="create-step active" id="step-indicator-1">
+                    <span class="create-step-num">1</span>
+                    <span class="create-step-label">Objet</span>
+                </div>
+                <div class="create-step-line"></div>
+                <div class="create-step" id="step-indicator-2">
+                    <span class="create-step-num">2</span>
+                    <span class="create-step-label">Contrepartie</span>
+                </div>
+                <div class="create-step-line"></div>
+                <div class="create-step" id="step-indicator-3">
+                    <span class="create-step-num">3</span>
+                    <span class="create-step-label">Paramètres</span>
+                </div>
+                <div class="create-step-line"></div>
+                <div class="create-step" id="step-indicator-4">
+                    <span class="create-step-num">4</span>
+                    <span class="create-step-label">Révision</span>
+                </div>
+            </div>
+
+            <div class="card card-centered-700 mt-10">
+                <!-- Objet de la transaction -->
+                <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
+                    <span>📄</span> Objet de la transaction
+                </div>
+                <p class="text-muted mb-065" style="font-size:.875rem">Décrivez ce qui est échangé. Ces informations figureront dans le contrat.</p>
+
+                <div class="form-group">
+                    <label>Intitulé du deal</label>
+                    <input type="text" id="transaction-title" placeholder="Cession de fonds de commerce — Boulangerie Marais" maxlength="120">
+                </div>
+
+                <div class="form-group">
+                    <label>Votre rôle</label>
+                    <div class="button-group gap-05">
+                        <button type="button" id="role-buyer-btn" class="button secondary" onclick="setCounterpartyRole(true)">
+                            📄 Je suis acheteur
+                        </button>
+                        <button type="button" id="role-seller-btn" class="button secondary" onclick="setCounterpartyRole(false)">
+                            📄 Je suis vendeur
+                        </button>
+                    </div>
+                    <input type="hidden" id="is-buyer-input" value="true">
+                </div>
+
+                <div class="form-group">
+                    <label>Description (optionnel)</label>
+                    <textarea id="transaction-desc" rows="3" placeholder="Détails sur ce qui est échangé…"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label id="counterparty-handle-label">Contrepartie (handle)</label>
+                    <div class="input-with-icon">
+                        <input type="text" id="seller-input" placeholder="@Alice110"
+                               onchange="updateAmountInfo()" onkeypress="if(event.key==='Enter') searchSeller()">
+                        <button type="button" class="icon-button" onclick="searchSeller()" title="Vérifier">🔍</button>
+                    </div>
+                    <div id="seller-status" class="seller-status hidden"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Crypto de paiement</label>
+                    <select id="crypto-select" onchange="updateAmountInfo()">
+                        <option value="">Chargement des tokens…</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Montant (EUR)</label>
+                    <input type="number" id="amount-input" placeholder="Ex : 1 000" min="10" max="100000" value="1000" onchange="updateAmountInfo()">
+                </div>
+
+                <div class="form-group">
+                    <label>Période de garantie (heures)</label>
+                    <input type="number" id="guarantee-select" placeholder="Durée en heures"
+                              list="guarantee-list" min="1" value="48" onchange="updateAmountInfo()">
+                    <datalist id="guarantee-list">
+                        <option value="4">4 heures (Express)</option>
+                        <option value="24">24 heures</option>
+                        <option value="48">48 heures (Recommandé)</option>
+                        <option value="72">72 heures</option>
+                        <option value="168">168 heures (7 jours)</option>
+                    </datalist>
+                </div>
+
+                <div id="amount-info" class="alert alert-info hidden">
+                    ℹ️ <span id="amount-info-text"></span>
+                </div>
+
+                <div id="create-info" class="hidden"></div>
+
+                <div class="button-group mt-10">
+                    <button class="button secondary" onclick="window.location.href='index.html'">Annuler</button>
+                    <button class="button" onclick="createEscrow()">Créer le deal →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             DÉPÔT DES FONDS (maquette 05)
+             ============================================================ -->
+        <div id="payment" class="tab-content">
+            <button class="deal-detail-back" onclick="switchTab('create')">← Retour au deal</button>
+
+            <div class="page-eyebrow" id="payment-ref-eyebrow">Dépôt des fonds</div>
+            <h1 class="page-title">Sécuriser le paiement</h1>
+
+            <!-- Stepper 3 étapes -->
+            <div class="create-stepper">
+                <div class="create-step active"><span class="create-step-num">1</span><span class="create-step-label">Récapitulatif</span></div>
+                <div class="create-step-line"></div>
+                <div class="create-step"><span class="create-step-num">2</span><span class="create-step-label">Méthode</span></div>
+                <div class="create-step-line"></div>
+                <div class="create-step"><span class="create-step-num">3</span><span class="create-step-label">Confirmation</span></div>
+            </div>
+
+            <div class="card card-centered-700 mt-10">
+                <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
+                    <span style="color:var(--navy-500)">♦</span> Répartition des fonds
+                </div>
+                <p class="text-muted mb-065" style="font-size:.875rem">Le montant est séparé entre la commission plateforme et le montant verrouillé dans le smart contract.</p>
+
+                <div class="payment-details">
+                    <div class="detail-row">
+                        <span class="detail-label">
+                            Commission plateforme<br>
+                            <small style="color:var(--slate-400);font-weight:400">1,5 % · prélevée à la confirmation</small>
+                        </span>
+                        <span class="detail-value" id="payment-commission">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label" style="color:var(--navy-500);font-weight:600">
+                            Montant sécurisé<br>
+                            <small style="color:var(--slate-400);font-weight:400">verrouillé jusqu'à libération</small>
+                        </span>
+                        <span class="detail-value" style="color:var(--navy-500)" id="payment-seller-gets">—</span>
+                    </div>
+                    <div class="detail-row" style="border-bottom:none;padding-bottom:0;margin-bottom:0">
+                        <span class="detail-label"><strong>Total à déposer</strong></span>
+                        <span class="detail-value" id="payment-id" style="font-size:1.125rem">—</span>
+                    </div>
+                </div>
+
+                <div class="button-group mt-10">
+                    <button class="button secondary" onclick="switchTab('create')">← Retour</button>
+                    <button class="button" onclick="confirmPayment()">Continuer →</button>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /.app-content -->
+</main>
+</div><!-- /.app-shell -->
+
+<script>
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+function handleSidebarProfileClick() {
+    if (typeof openProfileEditor === 'function') {
+        openProfileEditor();
+    } else {
+        window.location.href = 'login.html';
+    }
+}
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+
+
+    <!-- ============================================================
+         TAB: CRÉER TRANSACTION
+         ============================================================ -->
+    <div id="create" class="tab-content active">
+        <div class="header-section">
+            <h1>🚀 Créer une nouvelle transaction</h1>
+            <p>Lancez une transaction sécurisée en quelques clics</p>
+        </div>
+
+        <div class="card card-centered-700">
+            <div class="card-title">🚀 Créer une nouvelle transaction</div>
+            <div class="form-group">
+                <label>Je suis :</label>
+                <div class="button-group gap-05">
+                    <button type="button" id="role-buyer-btn" class="button success" onclick="setCounterpartyRole(true)">Acheteur</button>
+                    <button type="button" id="role-seller-btn" class="button secondary" onclick="setCounterpartyRole(false)">Vendeur</button>
+                </div>
+                <input type="hidden" id="is-buyer-input" value="true">
+            </div>
+            <div class="form-group">
+                <label>📝 Titre de la transaction</label>
+                <input type="text" id="transaction-title" placeholder="Ex: Vente NFT Mars 2026" maxlength="120">
+            </div>
+            <div class="form-group">
+                <label id="counterparty-handle-label">👤 Renseigner le nom d'utilisateur du vendeur</label>
+                <div class="input-with-icon">
+                    <input type="string" id="seller-input" placeholder="Ex: @Pierre110"
+                           onchange="updateAmountInfo()" onkeypress="if(event.key==='Enter') searchSeller()">
+                    <button type="button" class="icon-button" onclick="searchSeller()" title="Vérifier le vendeur">
+                        🔍
+                    </button>
+                </div>
+                <div id="seller-status" class="seller-status hidden"></div>
+            </div>
+            <div class="form-group">
+                <label>💱 Crypto de Paiement</label>
+                <select id="crypto-select" onchange="updateAmountInfo()">
+                    <option value="">Chargement des tokens...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>💶 Montant (EUR)</label>
+                <input type="number" id="amount-input" placeholder="Ex: 1000"
+                       min="10" max="100000" value="1000" onchange="updateAmountInfo()">
+            </div>
+            <div class="form-group">
+                <label>⏱️ Période de Garantie (Heures)</label>
+                <input type="number" id="guarantee-select" placeholder="Durée en heures"
+                          list="guarantee-list" min="1" value="48" onchange="updateAmountInfo()">
+                <datalist id="guarantee-list">
+                    <option value="4">4 heures (Express)</option>
+                    <option value="24">24 heures</option>
+                    <option value="48">48 heures (Recommandé)</option>
+                    <option value="72">72 heures</option>
+                    <option value="168">168 heures (7 jours)</option>
+                </datalist>
+            </div>
+            <div id="amount-info" class="alert alert-info hidden">
+                ℹ️ <span id="amount-info-text"></span>
+            </div>
+            <button class="button success" onclick="createEscrow()">🔗 Créer Transaction</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         TAB: PAIEMENT
+         ============================================================ -->
+    <div id="payment" class="tab-content">
+        <div class="header-section">
+            <h1>💳 Effectuez le Paiement</h1>
+            <p>Envoyez votre crypto à l'adresse fournie</p>
+        </div>
+
+        <div class="content-grid two-col-grid">
+            <!-- Payment details -->
+            <div class="card">
+                <div class="card-title">📋 Détails du Paiement</div>
+                <div class="payment-details">
+                    <div class="detail-row"><span class="detail-label">ID Commande:</span>           <span class="detail-value" id="payment-id">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Montant à Envoyer:</span>     <span class="detail-value" id="payment-crypto-amount">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Commission (5%):</span>        <span class="detail-value" id="payment-commission">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Vendeur Reçoit:</span>         <span class="detail-value" id="payment-seller-gets">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Équivalent USDT:</span>        <span class="detail-value" id="payment-usdt">-</span></div>
+                    <div class="detail-row"><span class="detail-label">Statut:</span>                 <span class="detail-value" id="payment-status">⏱️ EN ATTENTE</span></div>
+                    <div class="detail-row"><span class="detail-label">Temps Restant:</span>          <span class="detail-value countdown" id="countdown">30:00</span></div>
+                </div>
+
+                <div class="alert alert-warning">
+                    <span>⏰</span>
+                    <span>L'adresse de paiement expire dans 30 minutes. Envoyez rapidement.</span>
+                </div>
+
+                <div class="deal-progress-block">
+                    <h3 class="deal-progress-title">📊 Progression du Deal</h3>
+                    <div class="deal-progress-grid">
+                        <div class="deal-progress-step">
+                            <div class="deal-progress-dot done">✓</div>
+                            <div class="deal-progress-label">1. Créé</div>
+                        </div>
+                        <div class="deal-progress-step">
+                            <div class="deal-progress-dot current">2</div>
+                            <div class="deal-progress-label">2. Envoyer</div>
+                        </div>
+                        <div class="deal-progress-step">
+                            <div class="deal-progress-dot pending">3</div>
+                            <div class="deal-progress-label">3. Bridge</div>
+                        </div>
+                        <div class="deal-progress-step">
+                            <div class="deal-progress-dot pending">4</div>
+                            <div class="deal-progress-label">4. Lock</div>
+                        </div>
+                        <div class="deal-progress-step">
+                            <div class="deal-progress-dot pending">5</div>
+                            <div class="deal-progress-label">5. Libération</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Address & QR -->
+            <div class="card">
+                <div class="card-title">🔗 Adresse de Paiement</div>
+                <div class="qr-code">📱 QR</div>
+                <div class="address-box" id="payment-address">1A1z7agoat4b4Kc8z3c5z7x9y1z3a5b7c</div>
+                <button class="button secondary mb-075" onclick="copyPaymentAddress()">📋 Copier l'Adresse</button>
+                <button class="button secondary" onclick="alert('Fonction QR non disponible en démo. Utilisez l\'adresse ci-dessus.');">📱 Afficher QR Code</button>
+
+                <div class="alert alert-info mt-10">
+                    <span>ℹ️</span>
+                    <span>Scannez avec votre wallet mobile ou collez l'adresse</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-20">
+            <div class="card-title">📝 Instructions Paiement</div>
+            <div class="payment-instructions">
+                <div>1️⃣ <strong>Ouvrez</strong> votre wallet (MetaMask, Trust Wallet, Ledger…)</div>
+                <div>2️⃣ <strong>Sélectionnez</strong> la crypto: <strong id="payment-crypto-type" class="text-primary">BTC</strong></div>
+                <div>3️⃣ <strong>Scannez</strong> le QR ou <strong>collez</strong> l'adresse exacte</div>
+                <div>4️⃣ <strong>Envoyez</strong> exactement <strong id="payment-exact-amount" class="text-primary">0.023 BTC</strong></div>
+                <div>5️⃣ <strong>Confirmez</strong> la transaction (~10–30 min pour confirmations blockchain)</div>
+                <div>6️⃣ <strong>Attendez</strong> conversion automatique en USDT via Stargate (2–5 min)</div>
+                <div>7️⃣ <strong>Fonds verrouillés</strong> dans le smart contract Polygon ✅</div>
+            </div>
+            <div class="key-info mt-15">
+                <strong>🔒 Sécurité:</strong> Votre crypto est verrouillée dans un smart contract immuable.
+                Personne, pas même nous, ne peut la retirer sans votre approbation.
+            </div>
+            <div class="button-group mt-15">
+                <button class="button success" onclick="confirmPayment()">✅ Paiement Effectué</button>
+                <button class="button secondary" onclick="switchTab('create')">❌ Annuler</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
+    <p class="footer-links-row">
+        <a href="#">Conditions d'Utilisation</a> •
+        <a href="#">Politique de Confidentialité</a> •
+        <a href="#">Contact Support</a> •
+        <a href="#">Documentation</a>
+    </p>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
