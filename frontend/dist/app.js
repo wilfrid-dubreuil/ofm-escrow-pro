@@ -39,7 +39,6 @@ const cryptoPrices = {
     SOL:  220,
     USDT: 1,
     USDC: 1,
-    MATIC: 0.8,
     TON:  7
 };
 
@@ -1758,7 +1757,7 @@ function confirmPayment() {
 
     saveData();
     const hoursLeft = ((escrow.expires - Date.now()) / 3_600_000).toFixed(1);
-    alert(`✅ Paiement confirmé! Les fonds sont maintenant verrouillés dans le smart contract Polygon.\n\nLe vendeur peut maintenant livrer. Vous avez ${hoursLeft}h pour confirmer.`);
+    alert(`✅ Paiement confirmé! Les fonds sont maintenant verrouillés dans le smart contract Solana.\n\nLe vendeur peut maintenant livrer. Vous avez ${hoursLeft}h pour confirmer.`);
     window.location.href = 'index.html';
 }
 
@@ -1901,7 +1900,7 @@ async function showEscrowDetail(escrowId) {
 
     // Alert
     const alertMap = {
-        LOCKED:   `<div class="alert alert-success">✅ Fonds sécurisés dans le smart contract Polygon</div>`,
+        LOCKED:   `<div class="alert alert-success">✅ Fonds sécurisés dans le smart contract Solana</div>`,
         RELEASED: `<div class="alert alert-success">✅ Fonds libérés au vendeur</div>`,
         DISPUTE:  `<div class="alert alert-danger">⚠️ Litige en cours d'arbitrage</div>`,
         REFUNDED: `<div class="alert alert-info">💰 Fonds remboursés à l'acheteur</div>`

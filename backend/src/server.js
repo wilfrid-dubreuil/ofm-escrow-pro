@@ -62,7 +62,6 @@ const COINGECKO_MAP = {
   SOL: 'solana',
   USDT: 'tether',
   USDC: 'usd-coin',
-  MATIC: 'matic-network',
   TON: 'the-open-network'
 };
 
