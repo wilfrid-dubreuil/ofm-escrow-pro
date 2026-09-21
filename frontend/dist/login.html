@@ -29,7 +29,7 @@
             <div class="preview-avatar" id="previewAvatar">?</div>
             <div class="preview-info">
                 <div class="preview-name" id="previewName">Votre nom</div>
-                <div class="preview-role">Acheteur / Vendeur</div>
+                <div class="preview-role" id="previewRole">Acheteur / Vendeur</div>
             </div>
             <div class="preview-badge">Connecté</div>
         </div>
@@ -113,11 +113,10 @@
     }
 
     let isCreatingAccount = false;
+    let connectedPreviewUser = null;
 
-    // Redirect if already logged in
-    firebase.auth().onAuthStateChanged(user => {
-        if (user && !isCreatingAccount) window.location.href = 'index.html';
-    });
+    // Keep login page accessible even when a session already exists.
+    // Redirection to index is handled explicitly after a successful auth action.
 
     // ---- Mode (login | register) ----
     let currentMode = 'login';
@@ -164,11 +163,53 @@
     function updatePreview() {
         const nameInput = document.getElementById('login-name').value.trim();
         const emailInput = document.getElementById('login-email').value.trim();
+        const previewRoleEl = document.getElementById('previewRole');
+
         let display = nameInput || (emailInput ? emailInput.split('@')[0] : '');
+        if (!display && connectedPreviewUser) {
+            display = connectedPreviewUser.name
+                || (connectedPreviewUser.email ? connectedPreviewUser.email.split('@')[0] : '');
+        }
+
         const initials = getInitials(display);
         document.getElementById('previewAvatar').textContent = initials || '?';
         document.getElementById('previewName').textContent = display || 'Votre nom';
+
+        if (previewRoleEl) {
+            if (emailInput) {
+                previewRoleEl.textContent = emailInput;
+            } else if (connectedPreviewUser?.email) {
+                previewRoleEl.textContent = connectedPreviewUser.email;
+            } else {
+                previewRoleEl.textContent = 'Acheteur / Vendeur';
+            }
+        }
     }
+
+    function syncConnectedAccountPreview(user) {
+        if (!user) {
+            connectedPreviewUser = null;
+            updatePreview();
+            return;
+        }
+
+        const displayName = String(user.displayName || '').trim();
+        const email = String(user.email || '').trim();
+
+        connectedPreviewUser = {
+            name: displayName,
+            email
+        };
+
+        const emailInputEl = document.getElementById('login-email');
+        if (emailInputEl && !String(emailInputEl.value || '').trim() && email) {
+            emailInputEl.value = email;
+        }
+
+        updatePreview();
+    }
+
+    firebase.auth().onAuthStateChanged(syncConnectedAccountPreview);
 
     function updatePreviewFromEmail() {
         if (currentMode === 'login') updatePreview();
@@ -352,7 +393,7 @@
         }
     }
 
-    async function persistUserProfile(userPayload) {
+    async function persistUserProfile(userPayload, authContext = {}) {
         try {
             await db.collection('users').doc(userPayload.id_login).set(userPayload);
 
@@ -378,9 +419,15 @@
 
             if (!isPermissionError) throw error;
 
+            const headers = { 'Content-Type': 'application/json' };
+            const idToken = String(authContext.idToken || '').trim();
+            const uid = String(authContext.uid || userPayload.id_login || '').trim();
+            if (idToken) headers.Authorization = `Bearer ${idToken}`;
+            if (uid) headers['x-user-id'] = uid;
+
             const response = await fetch(`${API_BASE_URL}/api/users`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(userPayload)
             });
 
@@ -467,6 +514,7 @@
 
                 const res = await firebase.auth().createUserWithEmailAndPassword(email, password);
                 applyName(res.user);
+                const idToken = await res.user.getIdToken();
 
                 await persistUserProfile({
                     Name: name || (email ? email.split('@')[0] : ''),
@@ -475,6 +523,9 @@
                     id_login: res.user.uid,
                     mail: email,
                     réputation: 100
+                }, {
+                    idToken,
+                    uid: res.user.uid
                 });
 
                 isCreatingAccount = false;
@@ -489,7 +540,10 @@
             }
         } else {
             firebase.auth().signInWithEmailAndPassword(email, password)
-                .then(res => { applyName(res.user); })
+                .then(res => {
+                    applyName(res.user);
+                    window.location.href = 'index.html';
+                })
                 .catch(err => {
                     if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-login-credentials') {
                         showAlert('Identifiants incorrects. Vérifiez votre email et mot de passe.', 'error');

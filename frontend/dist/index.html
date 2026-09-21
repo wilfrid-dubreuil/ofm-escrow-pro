@@ -7,126 +7,200 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<!-- ============================================================
-     NAVIGATION
-     ============================================================ -->
-<nav>
-    <div class="nav-container">
-        <div class="logo">Actuarus</div>
-        <ul class="nav-links">
-            <li><a href="index.html"        class="nav-link active" data-tab="dashboard">📊 Dashboard</a></li>
-            <li><a href="transactions.html" class="nav-link"        data-tab="escrows">📝 Mes Transactions</a></li>
-            <li><a href="create.html"       class="nav-link"        data-tab="create">🚀 Créer</a></li>
-            <!-- login / logout links controlled by JS -->
-            <li id="nav-login"  style="display:block;"><a href="login.html">🔐 Connexion</a></li>
-            <li id="nav-logout" style="display:none;"><a onclick="logout()">🚪 Déconnexion</a></li>
-        </ul>
-        <div class="user-profile" style="display:none;">
-            <div class="user-avatar" id="userAvatar"></div>
-            <div class="user-meta">
-                <div id="userName"></div>
-                <div id="userEmail" class="user-secondary"></div>
-            </div>
-        </div>
-    </div>
-</nav>
-
-<!-- Select Overlay -->
 <div id="selectOverlay" class="select-overlay"></div>
 
-<div class="container">
-
-    <!-- ============================================================
-         DASHBOARD
-         ============================================================ -->
-    <div id="dashboard" class="tab-content active">
-        <div class="header-section">
-            <h1>🎯 Plateforme d'échanges Multi-Crypto Sécurisée</h1>
-            <p>Transactions sécurisées avec conversion automatique en USDT — Smart Contracts Solana</p>
-        </div>
-
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">📊 Total transactions</div>
-                <div class="stat-value" id="stat-total">0</div>
-                <div class="stat-change" id="stat-total-change">+0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">💰 Valeur Bloquée</div>
-                <div class="stat-value" id="stat-value">$0</div>
-                <div class="stat-change" id="stat-value-change">+0%</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">⚖️ Litiges Actifs</div>
-                <div class="stat-value" id="stat-disputes">0</div>
-                <div class="stat-change" id="stat-disputes-change">-0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">✅ Taux de Succès</div>
-                <div class="stat-value" id="stat-success">0%</div>
-                <div class="stat-change" id="stat-success-change">+0%</div>
-            </div>
-        </div>
-
-        <!-- Content grid -->
-        <div class="content-grid">
-            <!-- Recent escrows -->
-            <div class="card">
-                <div class="card-title">📝 Transactions Récentes</div>
-                <div id="recent-escrows">
-                    <p style="color: #94A3B8;">Aucune transaction pour le moment</p>
-                </div>
-            </div>
-              <!-- bouton creer -->
-            <div class="card">
-                <div class="card-title">🚀 Créer une Nouvelle Transaction</div>
-                <button class="button success" onclick="window.location.href='create.html'">Créer Transaction</button>
-            </div>
-
-            <!-- Key stats sidebar -->
-            <div class="card">
-                <div class="card-title">📊 Statistiques Clés</div>
-                <div style="color: #94A3B8; font-size: 0.9rem; line-height: 2;">
-                    <div><strong style="color:#E2E8F0;">Commission:</strong> <span id="key-commission">—</span></div>
-                    <div><strong style="color:#E2E8F0;">Réseau dominant:</strong> <span id="key-network">—</span></div>
-                    <div><strong style="color:#E2E8F0;">Plateforme dominante:</strong> <span id="key-platform">—</span></div>
-                    <div><strong style="color:#E2E8F0;">Litiges actifs:</strong> <span id="key-open-disputes">—</span></div>
-                    <div style="margin-top:1rem;"><strong style="color:#E2E8F0;">Cryptos observées:</strong></div>
-                    <div id="key-crypto-list">—</div>
-                </div>
-            </div>
-        </div><!-- /.content-grid -->
-
-        <!-- Feature badges -->
-        <div class="features-grid">
-            <div class="feature"><div class="feature-icon">💱</div><div class="feature-title">Multi-Crypto</div><div class="feature-text">7 cryptos supportées</div></div>
-            <div class="feature"><div class="feature-icon">🔄</div><div class="feature-title">Conversion Auto</div><div class="feature-text">Instantanée en USDT</div></div>
-            <div class="feature"><div class="feature-icon">🔐</div><div class="feature-title">Smart Contract</div><div class="feature-text">Sécurisé Polygon</div></div>
-            <div class="feature"><div class="feature-icon">⚖️</div><div class="feature-title">Arbitrage</div><div class="feature-text">Résolution juste</div></div>
-            <div class="feature"><div class="feature-icon">⏱️</div><div class="feature-title">Time-Lock</div><div class="feature-text">Auto-libération</div></div>
-            <div class="feature"><div class="feature-icon">📜</div><div class="feature-title">Signature Légale</div><div class="feature-text">Adobe Sign</div></div>
-        </div>
-    </div><!-- /#dashboard -->
-
-</div><!-- /.container -->
+<div class="app-shell">
 
 <!-- ============================================================
-     FOOTER
+     SIDEBAR
      ============================================================ -->
-<footer>
-    <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
-    <p style="font-size:0.85rem; margin-top:0.5rem;">
-        <a href="#">Conditions d'Utilisation</a> •
-        <a href="#">Politique de Confidentialité</a> •
-        <a href="#">Contact Support</a> •
-        <a href="#">Documentation</a>
-    </p>
-    <p style="font-size:0.8rem; margin-top:1rem; color:#64748B;">
-        Smart Contract: Polygon (L2) • Pont: Stargate Finance • Signatures: Adobe Sign
-    </p>
-</footer>
+<aside class="sidebar" id="sidebar">
+    <a href="index.html" class="sidebar-logo">
+        <img src="logo.jpeg" alt="Actuarus">
+        <span class="sidebar-logo-text">Actuarus</span>
+    </a>
+
+    <div class="sidebar-topbar">
+        <a href="create.html" class="sidebar-new-deal-btn">+ &nbsp;Nouveau deal</a>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a href="index.html" class="sidebar-nav-item active" id="nav-deals">
+            <span class="nav-icon">☰</span>
+            Mes deals
+            <span class="sidebar-nav-badge" id="sidebar-badge-deals">0</span>
+        </a>
+        <a href="transactions.html" class="sidebar-nav-item" id="nav-messages">
+            <span class="nav-icon">💬</span>
+            Messages
+        </a>
+        <a href="transactions.html" class="sidebar-nav-item" id="nav-archives">
+            <span class="nav-icon">🗂</span>
+            Archives
+        </a>
+        <a href="admin/settings.html" class="sidebar-nav-item" id="nav-settings">
+            <span class="nav-icon">⚙</span>
+            Paramètres
+        </a>
+
+        <div class="sidebar-nav-section-label">Démos d'écrans</div>
+        <a href="login.html" class="sidebar-nav-item" id="nav-invite">
+            <span class="nav-icon">✉</span>
+            Invitation reçue
+        </a>
+        <a href="admin/index.html" class="sidebar-nav-item" id="nav-admin">
+            <span class="nav-icon">⚖</span>
+            Arbitrage (admin)
+        </a>
+        <a href="login.html" class="sidebar-nav-item hidden" id="nav-login">
+            <span class="nav-icon">🔐</span>
+            Connexion
+        </a>
+        <a href="#" class="sidebar-nav-item hidden" id="nav-logout" onclick="logout(); return false;">
+            <span class="nav-icon">🚪</span>
+            Déconnexion
+        </a>
+    </nav>
+
+    <a class="sidebar-profile" id="sidebarProfile" onclick="handleSidebarProfileClick()">
+        <div class="sidebar-profile-avatar" id="sidebarAvatar">?</div>
+        <div class="sidebar-profile-info">
+            <div class="sidebar-profile-name" id="sidebarName">Non connecté</div>
+            <div class="sidebar-profile-sub" id="sidebarSub">Cliquer pour se connecter</div>
+        </div>
+        <span class="sidebar-profile-chevron">›</span>
+    </a>
+</aside>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<main class="app-main">
+    <header class="app-topbar">
+        <button class="app-topbar-hamburger" id="topbarHamburger" onclick="toggleSidebar()">☰</button>
+        <div class="app-topbar-search">
+            <input type="search" placeholder="Rechercher un deal, une contrepartie, une référence..." id="topbarSearch">
+        </div>
+        <div class="app-topbar-spacer"></div>
+        <div class="app-topbar-actions">
+            <button class="app-topbar-icon-btn" title="Mode sombre">🌙</button>
+            <button class="app-topbar-icon-btn" title="Notifications" id="topbarNotif">
+                🔔
+                <span class="app-topbar-notif-dot hidden" id="notifDot"></span>
+            </button>
+            <button class="app-topbar-user-btn" id="topbarUserBtn" onclick="handleSidebarProfileClick()"></button>
+        </div>
+    </header>
+
+    <div class="app-content">
+
+        <!-- ============================================================
+             DASHBOARD
+             ============================================================ -->
+        <div id="dashboard" class="tab-content active">
+            <div class="header-section">
+                <h1>🎯 Plateforme d'échanges Multi-Crypto Sécurisée</h1>
+                <p>Transactions sécurisées avec conversion automatique en USDT — Smart Contracts Solana</p>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">📊 Total transactions</div>
+                    <div class="stat-value" id="stat-total">0</div>
+                    <div class="stat-change" id="stat-total-change">+0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">💰 Valeur Bloquée</div>
+                    <div class="stat-value" id="stat-value">$0</div>
+                    <div class="stat-change" id="stat-value-change">+0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">⚖️ Litiges Actifs</div>
+                    <div class="stat-value" id="stat-disputes">0</div>
+                    <div class="stat-change" id="stat-disputes-change">-0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">✅ Taux de Succès</div>
+                    <div class="stat-value" id="stat-success">0%</div>
+                    <div class="stat-change" id="stat-success-change">+0%</div>
+                </div>
+            </div>
+
+            <!-- Content grid -->
+            <div class="content-grid">
+                <!-- Recent escrows -->
+                <div class="card">
+                    <div class="card-title">📝 Transactions Récentes</div>
+                    <div id="recent-escrows">
+                        <p style="color: #94A3B8;">Aucune transaction pour le moment</p>
+                    </div>
+                </div>
+
+                <!-- bouton creer -->
+                <div class="card">
+                    <div class="card-title">🚀 Créer une Nouvelle Transaction</div>
+                    <button class="button success" onclick="window.location.href='create.html'">Créer Transaction</button>
+                </div>
+
+                <!-- Key stats sidebar -->
+                <div class="card">
+                    <div class="card-title">📊 Statistiques Clés</div>
+                    <div style="color: #94A3B8; font-size: 0.9rem; line-height: 2;">
+                        <div><strong style="color:#E2E8F0;">Commission:</strong> <span id="key-commission">—</span></div>
+                        <div><strong style="color:#E2E8F0;">Réseau dominant:</strong> <span id="key-network">—</span></div>
+                        <div><strong style="color:#E2E8F0;">Plateforme dominante:</strong> <span id="key-platform">—</span></div>
+                        <div><strong style="color:#E2E8F0;">Litiges actifs:</strong> <span id="key-open-disputes">—</span></div>
+                        <div style="margin-top:1rem;"><strong style="color:#E2E8F0;">Cryptos observées:</strong></div>
+                        <div id="key-crypto-list">—</div>
+                    </div>
+                </div>
+            </div><!-- /.content-grid -->
+
+            <!-- Feature badges -->
+            <div class="features-grid">
+                <div class="feature"><div class="feature-icon">💱</div><div class="feature-title">Multi-Crypto</div><div class="feature-text">7 cryptos supportées</div></div>
+                <div class="feature"><div class="feature-icon">🔄</div><div class="feature-title">Conversion Auto</div><div class="feature-text">Instantanée en USDT</div></div>
+                <div class="feature"><div class="feature-icon">🔐</div><div class="feature-title">Smart Contract</div><div class="feature-text">Sécurisé Polygon</div></div>
+                <div class="feature"><div class="feature-icon">⚖️</div><div class="feature-title">Arbitrage</div><div class="feature-text">Résolution juste</div></div>
+                <div class="feature"><div class="feature-icon">⏱️</div><div class="feature-title">Time-Lock</div><div class="feature-text">Auto-libération</div></div>
+                <div class="feature"><div class="feature-icon">📜</div><div class="feature-title">Signature Légale</div><div class="feature-text">Adobe Sign</div></div>
+            </div>
+        </div><!-- /#dashboard -->
+
+        <!-- ============================================================
+             FOOTER
+             ============================================================ -->
+        <footer>
+            <p>🛡️ OFM Transactions Pro — Plateforme d'échanges Multi-Crypto Décentralisée | 2025</p>
+            <p style="font-size:0.85rem; margin-top:0.5rem;">
+                <a href="#">Conditions d'Utilisation</a> •
+                <a href="#">Politique de Confidentialité</a> •
+                <a href="#">Contact Support</a> •
+                <a href="#">Documentation</a>
+            </p>
+            <p style="font-size:0.8rem; margin-top:1rem; color:#64748B;">
+                Smart Contract: Polygon (L2) • Pont: Stargate Finance • Signatures: Adobe Sign
+            </p>
+        </footer>
+
+    </div><!-- /.app-content -->
+</main>
+</div><!-- /.app-shell -->
+
+<script>
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+
+function handleSidebarProfileClick() {
+    if (typeof openProfileEditor === 'function') {
+        openProfileEditor();
+    } else {
+        window.location.href = 'login.html';
+    }
+}
+</script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
